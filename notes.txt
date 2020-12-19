@@ -1,0 +1,4 @@
+to add new class
+
+add options to TargetGenerator
+add to draw target, make new item in dictionary
