@@ -1,4 +1,9 @@
-to add new class
 
-add options to TargetGenerator
-add to draw target, make new item in dictionary
+best_model = copy.deepcopy(net.state_dict())
+
+numbers to beat
+letter: 79.7%
+letter_color: 94.1%
+shape: 95.5%
+shape_color: 99.0%
+

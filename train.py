@@ -14,7 +14,7 @@ from generate_samples import TargetGenerator
 from model import TargetNet
 
 # Data loader class
-class ShapeDataset(Dataset):
+class TargetDataset(Dataset):
     def __init__(self, transforms, input_size, target_size, length):
         self.transforms = transforms
         self.gen = TargetGenerator()
@@ -22,51 +22,54 @@ class ShapeDataset(Dataset):
         self.input_size = input_size
         self.target_size = target_size
 
+    def get_target_size(self):
+        return int(np.random.uniform(0.9*target_size, target_size))
+
     def __len__(self):
         return self.length
 
     def __getitem__(self, idx):
-        x, y = self.gen.draw_target(self.input_size, self.target_size)
+        x, y = self.gen.draw_target(self.input_size, self.get_target_size())
         return self.transforms(x), torch.tensor(list(y.values())).squeeze()
 
 
 if __name__ == "__main__" and '__file__' in globals():
 
-    MANUAL_SEED = 12
+    MANUAL_SEED = 101
     torch.manual_seed(MANUAL_SEED)
     torch.cuda.manual_seed(MANUAL_SEED)
     np.random.seed(MANUAL_SEED)
 
 
     # Model Config
-    input_size = 32
+    input_size = 64
     in_channels = 3
     # num classes is defined after dataset is made
 
     # Training Hyperparameters
-    num_epochs = 20
+    num_epochs = 14
 
-    batch_size = 8
-    num_workers = 4
+    batch_size = 128
+    num_workers = 0
     shuffle = False
     drop_last = True
 
-    dropout_conv = 0.3
-    base_lr = 1e-4
+    dropout_conv = 0.0
+    base_lr = 1e-3
     momentum = 0.9
-    weight_decay = 0.0
+    weight_decay = 5e-4
 
     lr_step_size = 7
     lr_step_gamma = 0.1
 
     # Dataset config
     class_type_idx = 0
-    target_size = 10
-    train_size = 128
-    test_size = 64
+    target_size = 48
+    train_size = 4096
+    test_size = 1024
 
-    set_mean = [0.176, 0.138, 0.123]
-    set_std = [0.282, 0.235, 0.233]
+    set_mean = [0.274, 0.345, 0.451]
+    set_std = [0.319, 0.350, 0.429]
 
     train_transforms = T.Compose([
         T.ToTensor(),
@@ -77,7 +80,7 @@ if __name__ == "__main__" and '__file__' in globals():
         T.Normalize(mean=set_mean, std=set_std)
     ])
 
-    train_dataset = ShapeDataset(
+    train_dataset = TargetDataset(
         transforms=train_transforms,
         input_size=input_size,
         target_size=target_size,
@@ -89,7 +92,7 @@ if __name__ == "__main__" and '__file__' in globals():
         ,num_workers=num_workers
         ,drop_last=drop_last)
 
-    test_dataset = ShapeDataset(
+    test_dataset = TargetDataset(
         transforms=test_transforms,
         input_size=input_size,
         target_size=target_size,
@@ -98,6 +101,9 @@ if __name__ == "__main__" and '__file__' in globals():
 
     # TODO : fixed for multiclass
     num_classes = test_dataset.gen.num_classes[class_type_idx]
+
+
+    exit()
 
     # Time dataloader
     # import time
@@ -117,7 +123,7 @@ if __name__ == "__main__" and '__file__' in globals():
     # Check for cuda
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print('device:', device)
-    model = TargetNet(num_classes, in_channels, dropout_conv).to(device)
+    model = TargetNet(in_channels, num_classes, dropout_conv).to(device)
     optimizer = optim.SGD(model.parameters(),
                         lr=base_lr,
                         momentum=momentum,
@@ -131,11 +137,11 @@ if __name__ == "__main__" and '__file__' in globals():
     valid_loss = []
     valid_accuracy = []
 
-    def train(epoch, model, optimizer, dataloader, criterion, scheduler, mode='train'):
+    def train(epoch, model, optimizer, dataloader, criterion, scheduler, train=False):
 
-        if mode == "train":
+        if train:
             model.train()
-        elif mode == "val":
+        else:
             model.eval()
 
         total_loss = 0
@@ -163,17 +169,20 @@ if __name__ == "__main__" and '__file__' in globals():
             correct += (pred == target).sum()
             total += data.size(0)
 
-            output = torch.squeeze(output)
+            output = torch.squeeze(output)  # flatten the last conv
             # print("output 2:", output.shape)
 
             # Computing the loss
+            # loss_func = nn.BCEWithLogitsLoss()
+            # loss2 = loss_func() 
+
             loss = criterion(output, target)
             # print("loss :", loss)
             total_loss += loss.item()
             # print("total_loss :", total_loss)
 
             # Computing the updated weights of all the model parameters
-            if mode == "train":
+            if train:
                 loss.backward()
                 optimizer.step()
                 scheduler.step()
@@ -182,19 +191,19 @@ if __name__ == "__main__" and '__file__' in globals():
         unit_loss = total_loss / len(dataloader)
         acc = 100 * correct / total
 
-        print("EPOCH {}. mode={}. Accuracy={:.2f}%. Loss={:.4f}".format(epoch, mode, acc, unit_loss))
+        print("EPOCH {}. train={}. Accuracy={:.2f}%. Loss={:.4f}".format(epoch, train, acc, unit_loss))
 
-        if mode == "train":
+        if train:
             train_loss.append(unit_loss)
             train_accuracy.append(acc)
-        elif mode == "val":
+        else:
             valid_loss.append(unit_loss)
             valid_accuracy.append(acc)
 
 
     for epoch in range(num_epochs):
-        train(epoch, model, optimizer, train_loader, criterion, scheduler, mode='train')
-        train(epoch, model, optimizer, test_loader, criterion, scheduler, mode='val')
+        train(epoch, model, optimizer, train_loader, criterion, scheduler, train=True)
+        train(epoch, model, optimizer, test_loader, criterion, scheduler, train=False)
 
 
     # exit()

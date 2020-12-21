@@ -45,13 +45,13 @@ class ResidualBlock(nn.Module):
 
 
 class TargetNet(nn.Module):
-    def __init__(self, num_classes, in_channels, dropout_conv=0.0):
+    def __init__(self, in_channels, out_features, dropout_conv=0.0):
         super(TargetNet, self).__init__()  # Base module
 
         conv1_filters = 32
-        block1_filters = 48
-        block2_filters = 64
-        conv_out_size = 4
+        block1_filters = 32
+        block2_filters = 32
+        conv_out_size = 8
 
         self.conv1 = nn.Conv2d(
             in_channels=in_channels, out_channels=conv1_filters, kernel_size=(7, 7),
@@ -62,10 +62,8 @@ class TargetNet(nn.Module):
         self.dropout_conv = nn.Dropout2d(p=dropout_conv)
         self.block1 = self._create_block(conv1_filters, block1_filters, stride=2, n=1)
         self.block2 = self._create_block(block1_filters, block2_filters, stride=2, n=1)
-        # self.multi_head = []
-        # for i in range(len(num_classes)):
         self.last_conv = nn.Conv2d(
-            in_channels=block2_filters, out_channels=num_classes,
+            in_channels=block2_filters, out_channels=out_features,
             kernel_size=(1, 1), stride=1, padding=0, bias=True
         )
 
@@ -87,13 +85,27 @@ class TargetNet(nn.Module):
         out = self.block1(out)
         out = self.dropout_conv(out)
         out = self.block2(out)
-        out = self.last_conv(out)
         out = self.avgpool2d(out)
+        out = self.last_conv(out)
+        # flatten to features
         return out
+
+
+class MultiLabelTargetNet(nn.Module):
+    def __init__(self, basemodel, in_features, num_classes):
+        super(MultiLabelModel, self).__init__()
+        self.basemodel = basemodel
+        self.num_classes = num_classes
+        # make the multi label heads
+    
+    def forward(self, x):
+        x = self.basemodel.forward(x)
+        # forward the label heads
+
 
 if __name__ == "__main__":
     device = 'cuda'
-    input_size = 32
+    input_size = 64
     num_classes = 4
     in_channels = 3
     model = TargetNet(num_classes, in_channels).to(device)
