@@ -7,3 +7,9 @@ letter_color: 94.1%
 shape: 95.5%
 shape_color: 99.0%
 
+todo
+-lr scheduler, StepLR was causing problems with optimization
+-label weights, color is easier so has less weight etc.
+-class weights, harder shapes and letters get weighted more (or sampled more?)
+-model save after epochs
+-visualize the metrics, confusion matrix

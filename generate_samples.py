@@ -26,7 +26,7 @@ class TargetGenerator():
         ]
         self.color_options = [
             'red', 'orange', 'yellow','green', 'blue',
-            'purple', 'brown', 'gray', 'white', 'black'
+            'purple', 'brown', 'gray', 'white', #'black'
         ]
         # No W or 9
         self.letter_options = [
@@ -35,17 +35,36 @@ class TargetGenerator():
             'X', 'Y', 'Z', '1', '2', '3', '4', '5', '6', '7', '8', '0'
         ]
         self.font_options = [
+            "fonts/Aller_Bd.ttf",
+            "fonts/Aller_Lt.ttf",
+            "fonts/DroidSans.ttf",
             "fonts/InputSans-Regular.ttf",
-            "fonts/FreeSansBold.ttf"
+            "fonts/Lato-Black.ttf",
+            "fonts/Lato-Bold.ttf",
+            "fonts/Lato-Heavy.ttf",
+            "fonts/Lato-Medium.ttf",
+            "fonts/Lato-Regular.ttf",
+            "fonts/Lato-Semibold.ttf",
+            "fonts/OpenSans-Regular.ttf",
+            "fonts/OpenSans-Semibold.ttf",
+            "fonts/Raleway-Bold.ttf",
+            "fonts/Raleway-Medium.ttf",
+            "fonts/Raleway-SemiBold.ttf",
+            "fonts/Roboto-Medium.ttf",
+            "fonts/Roboto-Regular.ttf",
         ]
 
-        self.shape_options = ["circle", "square"]
-        self.color_options = ['white', 'blue']
+        # self.shape_options = ["square", "triangle", "rectangle", "pentagon", "hexagon", "heptagon", "octagon"]
+        # self.color_options = ['white', 'blue']
 
         self.num_classes = [
             len(self.shape_options),
-            len(self.color_options)
+            len(self.color_options),
+            # len(self.letter_options),
+            # len(self.color_options),
+            # 1  # orientation
         ]
+        self.label_weights = None
 
     def color_to_hsv(self, color):
         options = {
@@ -74,9 +93,10 @@ class TargetGenerator():
         return points
 
 
-    def draw_shape(self, draw, img_size, target_size, shape_idx, color, rotation=False):
+    def draw_shape(self, draw, img_size, target_size, shape_idx, color,
+            scale=(1.0, 1.0), rotation=False):
         shape = self.shape_options[shape_idx]
-        r = target_size // 2  # half width of target
+        r = (np.random.uniform(*scale)*target_size) // 2  # half width of target
         # Random center
         cx, cy = np.random.randint(r, img_size-r), np.random.randint(r, img_size-r)
         angle = 0
@@ -115,7 +135,7 @@ class TargetGenerator():
             points = self.make_regular_polygon(radius, 3, angle, center=(cx, cy))
             draw.polygon(points, fill=color)
         elif shape == "rectangle":
-            h = int(r*np.random.randint(25, 60) / 100)
+            h = int(r*np.random.randint(81, 97) / 100)
             w = np.sqrt(r*r - h*h)
             l = int(min(w, h)*np.random.randint(70, 90) / 100)
             points = [( +w, +h ),( +w, -h ),( -w, -h ),( -w, +h )]
@@ -159,7 +179,7 @@ class TargetGenerator():
         elif shape == "cross":
             h = int(r*np.random.randint(25, 55) / 100)
             w = np.sqrt(r*r - h*h)
-            l = int(min(w, h)*np.random.randint(75, 90) / 100)
+            l = int(min(w, h)*np.random.randint(80, 97) / 100)
             points = [( +w, +h ),( +w, -h ),( -w, -h ),( -w, +h )]
             points1 = [(x[0]+cx, x[1]+cy) for x in rotate_2d(points, angle, degrees=True)]
             points2 = [(x[0]+cx, x[1]+cy) for x in rotate_2d(points, angle+90, degrees=True)]
@@ -192,7 +212,7 @@ class TargetGenerator():
         img = img.rotate(angle, expand=1)
         return img
 
-    def draw_target(self, img_size, target_size):
+    def draw_target(self, img_size, target_size, scale=(1.0, 1.0), rotation=False):
         # Create a tranparent image to overlay on background images
         img = Image.new('RGBA', size=(img_size, img_size), color=(0, 0, 0, 0))
         draw = ImageDraw.Draw(img)
@@ -206,8 +226,8 @@ class TargetGenerator():
 
         # Render the target from the label choices
         shape_color = self.color_to_hsv(self.color_options[shape_color_idx])
-        (cx, cy), l, angle = self.draw_shape(draw, img_size, target_size, shape_idx, shape_color, rotation=False)
-
+        (cx, cy), l, angle = self.draw_shape(draw, img_size, target_size, shape_idx, shape_color,
+            scale=scale, rotation=rotation)
         letter_angle_offset = 0
         orientation = (angle + np.random.uniform(-letter_angle_offset, letter_angle_offset)) % 360
         letter_color = self.color_to_hsv(self.color_options[letter_color_idx])
@@ -221,9 +241,9 @@ class TargetGenerator():
         label = {
             "shape": shape_idx,
             "shape_color": shape_color_idx,
-            "letter": letter_idx,
-            "letter_color": letter_color_idx,
-            "orientation": orientation/360
+            # "letter": letter_idx,
+            # "letter_color": letter_color_idx,
+            # "orientation": (orientation-180)/360
         }
         return img, label
 
@@ -233,27 +253,29 @@ if __name__ == "__main__":
     gen = TargetGenerator()
 
     img_size = 64
-    target_size = 36
+    target_size = 60
+    scale = (1.0, 1.0)
+    rotation = False
 
     # x, y = gen.draw_target(img_size, target_size)
     # x.show()
     # exit()
 
-    # nimg = 10000
-    # mean = 0.0
-    # var = 0.0
-    # for i in range(nimg):
-    #     # img in shape [W, H, C]
-    #     img, y = gen.draw_target(img_size, target_size)
-    #     # img = np.random.normal(size=(img_size, img_size, 3)) * 255
-    #     # [1, C, H, W], expand so that the mean function can run on dim=0
-    #     img = np.expand_dims((np.array(img) / 255.).transpose((2, 1, 0)), axis=0)
-    #     mean += np.mean(img, axis=(0, 2, 3))
-    #     var += np.var(img, axis=(0, 2, 3))  # you can add var, not std
-    # mean = mean/nimg
-    # std = np.sqrt(var/nimg)
-    # print("mean :", mean)
-    # print("std :", std)
+    nimg = 4000
+    mean = 0.0
+    var = 0.0
+    for i in range(nimg):
+        # img in shape [W, H, C]
+        img, y = gen.draw_target(img_size, target_size, scale=scale, rotation=rotation)
+        # img = np.random.normal(size=(img_size, img_size, 3)) * 255
+        # [1, C, H, W], expand so that the mean function can run on dim=0
+        img = np.expand_dims((np.array(img) / 255.).transpose((2, 1, 0)), axis=0)
+        mean += np.mean(img, axis=(0, 2, 3))
+        var += np.var(img, axis=(0, 2, 3))  # you can add var, not std
+    mean = mean/nimg
+    std = np.sqrt(var/nimg)
+    print("mean :", mean)
+    print("std :", std)
 
     nrows = 8
     ncols = 16
@@ -261,7 +283,7 @@ if __name__ == "__main__":
     for i in range(nrows):
         row = []
         for j in range(ncols):
-            img, label = gen.draw_target(img_size, target_size)
+            img, label = gen.draw_target(img_size, target_size, scale=scale)
             row.append(img)
         rows.append( np.hstack(row) )
     grid_img = np.vstack(rows)
