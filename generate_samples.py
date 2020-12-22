@@ -60,11 +60,12 @@ class TargetGenerator():
         self.num_classes = [
             len(self.shape_options),
             len(self.color_options),
-            # len(self.letter_options),
-            # len(self.color_options),
+            len(self.letter_options),
+            len(self.color_options),
             # 1  # orientation
         ]
         self.label_weights = None
+
 
     def color_to_hsv(self, color):
         options = {
@@ -241,8 +242,8 @@ class TargetGenerator():
         label = {
             "shape": shape_idx,
             "shape_color": shape_color_idx,
-            # "letter": letter_idx,
-            # "letter_color": letter_color_idx,
+            "letter": letter_idx,
+            "letter_color": letter_color_idx,
             # "orientation": (orientation-180)/360
         }
         return img, label
