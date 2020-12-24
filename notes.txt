@@ -2,14 +2,15 @@
 best_model = copy.deepcopy(net.state_dict())
 
 numbers to beat
+orientation: unknown
 letter: 79.7%
 letter_color: 94.1%
 shape: 95.5%
 shape_color: 99.0%
 
 todo
--lr scheduler, StepLR was causing problems with optimization
--label weights
--class weights, harder shapes and letters get weighted more (or sampled more?)
+-label weights, "Multi-Task Learning Using Uncertainty to Weigh Losses for Scene Geometry and Semantics"
+-class weights, some classes are more difficult
 -model save after epochs
--visualize the metrics, confusion matrix
+-visualize the metrics, confusion matrix, make jupyter notebook
+

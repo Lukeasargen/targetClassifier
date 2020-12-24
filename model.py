@@ -1,21 +1,44 @@
 from collections import OrderedDict
 import torch
 import torch.nn as nn  # Building the model
-import torch.nn.functional as F  # Loss functions and convolutions
 from torch.autograd import Variable
 from torchsummary import summary
 
 
 class ResidualBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, stride=1):
+    def __init__(self, in_channels, out_channels, stride=1,
+            bottleneck=False, groups=1, width_per_group=None):
         super(ResidualBlock, self).__init__()
-        self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
-            kernel_size=(3, 3), stride=stride, padding=1, bias=False)
-        self.bn1 = nn.BatchNorm2d(out_channels)
-        self.conv2 = nn.Conv2d(in_channels=out_channels, out_channels=out_channels,
-            kernel_size=(3, 3), stride=1, padding=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(out_channels)
-        self.relu = nn.ReLU()
+
+        if bottleneck:
+            if width_per_group:  # TODO : I don't think this is right
+                downscale_filters = int(out_channels * (width_per_group / 256.)) * groups
+            else:
+                downscale_filters = int(out_channels / 4)
+
+            # print("downscale_filters :", downscale_filters)
+            
+            self.block = nn.Sequential(OrderedDict([
+                ('conv1', nn.Conv2d(in_channels=in_channels, out_channels=downscale_filters,
+                    kernel_size=(1, 1), stride=1, padding=0, bias=False)),
+                ('bn1', nn.BatchNorm2d(downscale_filters)),
+                ('conv2', nn.Conv2d(in_channels=downscale_filters, out_channels=downscale_filters,
+                    kernel_size=(3, 3), stride=stride, padding=1, groups=groups, bias=False)),
+                ('bn2', nn.BatchNorm2d(downscale_filters)),
+                ('conv3', nn.Conv2d(in_channels=downscale_filters, out_channels=out_channels,
+                    kernel_size=(1, 1), stride=1, padding=0, bias=False)),
+                ('bn3', nn.BatchNorm2d(out_channels)),
+            ]))
+        else:
+            self.block = nn.Sequential(OrderedDict([
+                ('conv1', nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
+                    kernel_size=(3, 3), stride=stride, padding=1, bias=False)),
+                ('bn1', nn.BatchNorm2d(out_channels)),
+                ('conv2', nn.Conv2d(in_channels=out_channels, out_channels=out_channels,
+                    kernel_size=(3, 3), stride=1, padding=1, bias=False)),
+                ('bn2', nn.BatchNorm2d(out_channels)),
+            ]))
+        
         # Shortcut connection to downsample residual
         # In case the output dimensions of the residual block is not the same 
         # as it's input, have a convolutional layer downsample the layer
@@ -27,65 +50,64 @@ class ResidualBlock(nn.Module):
                     kernel_size=(1, 1), stride=stride, bias=False),
                 nn.BatchNorm2d(out_channels)
             )
+        self.relu = nn.ReLU()
 
     def forward(self, x):
-        out = self.relu(self.bn1(self.conv1(x)))
-        out = self.bn2(self.conv2(out))
+        out = self.block(x)
         out += self.shortcut(x)
         out = self.relu(out)
         return out
 
 
-class TargetNet(nn.Module):
-    def __init__(self, in_channels, out_features, dropout_conv=0.0):
-        super(TargetNet, self).__init__()
-        conv1_filters = 16
-        block1_filters = 16
-        block2_filters = 32
-        block3_filters = 64
-        block4_filters = 128
-        conv_out_size = 4  # calculated, input_size/16
-        blocks = [2, 2, 2, 2]
-
-        self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=conv1_filters,
-            kernel_size=(7, 7), stride=2, padding=3, bias=True)
-        self.bn1 = nn.BatchNorm2d(conv1_filters)
-        self.relu = nn.ReLU()
+class BasicResnet(nn.Module):
+    def __init__(self, in_channels, out_features, avgpool_size,
+            filters=[64, 64, 128, 256, 512], blocks=[2, 2, 2, 2], bottleneck=False,
+            groups=1, width_per_group=None, dropout_conv=0.0):
+        super(BasicResnet, self).__init__()
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(in_channels=in_channels, out_channels=filters[0],
+                kernel_size=(7, 7), stride=2, padding=3, bias=True),
+            nn.BatchNorm2d(filters[0]),
+            nn.ReLU()
+        )
         self.dropout_conv = nn.Dropout2d(p=dropout_conv)
-        self.block1 = self._create_block(conv1_filters, block1_filters, stride=1, n=blocks[0])
-        self.block2 = self._create_block(block1_filters, block2_filters, stride=2, n=blocks[1])
-        self.block3 = self._create_block(block2_filters, block3_filters, stride=2, n=blocks[2])
-        self.block4 = self._create_block(block3_filters, block4_filters, stride=2, n=blocks[3])
-        self.last_conv = nn.Conv2d(in_channels=block4_filters, out_channels=out_features,
+        self.block1 = self._create_block(filters[0], filters[1], 1, blocks[0], bottleneck, groups, width_per_group)
+        self.block2 = self._create_block(filters[1], filters[2], 2, blocks[1], bottleneck, groups, width_per_group)
+        self.block3 = self._create_block(filters[2], filters[3], 2, blocks[2], bottleneck, groups, width_per_group)
+        self.block4 = self._create_block(filters[3], filters[4], 2, blocks[3], bottleneck, groups, width_per_group)
+        self.last_conv = nn.Conv2d(in_channels=filters[4], out_channels=out_features,
             kernel_size=(1, 1), stride=1, padding=0, bias=True)
-        self.avgpool2d = nn.AvgPool2d(conv_out_size)
+        self.avgpool = nn.AvgPool2d(avgpool_size)
+
+        # TODO : Intialize shortcut branches
+        # Batch norms should be weight 1 and bias 0
+        # kaiming normal for all convs
     
-    def _create_block(self, in_channels, out_channels, stride, n):
+    def _create_block(self, in_channels, out_channels, stride, n, bottleneck, groups, width_per_group):
         layers = []
         for i in range(n):
             if i == 0:
-                layers.append(ResidualBlock(in_channels, out_channels, stride))
+                layers.append(ResidualBlock(in_channels, out_channels, stride, bottleneck, groups, width_per_group))
             else:
-                layers.append(ResidualBlock(out_channels, out_channels, 1))
+                layers.append(ResidualBlock(out_channels, out_channels, 1, bottleneck, groups, width_per_group))
         return nn.Sequential(*layers)
 
     def forward(self, x):
-        out = self.bn1(self.conv1(x))
-        out = self.relu(out)
+        out = self.conv1(x)
         out = self.dropout_conv(out)
         out = self.block1(out)
         out = self.dropout_conv(out)
         out = self.block2(out)
         out = self.block3(out)
         out = self.block4(out)
-        out = self.avgpool2d(out)
+        out = self.avgpool(out)
         out = self.last_conv(out)
         return out
 
 
-class MultiLabelTargetNet(nn.Module):
+class MultiTaskTargetNet(nn.Module):
     def __init__(self, basemodel, backbone_features, num_classes):
-        super(MultiLabelTargetNet, self).__init__()
+        super(MultiTaskTargetNet, self).__init__()
         self.basemodel = basemodel
         self.num_classes = num_classes
         # make the multi label heads
@@ -111,28 +133,50 @@ class MultiLabelTargetNet(nn.Module):
             outs.append(out)
         return outs
 
-def BuildMultiLabelTargetNet(in_channels, backbone_features, num_classes, dropout_conv=0.0):
+def BuildMultiTaskTargetNet(in_channels, backbone_features, avgpool_size, num_classes,
+        filters=[64, 64, 128, 256, 512], blocks=[2, 2, 2, 2], bottleneck=False,
+        groups=1, width_per_group=None, dropout_conv=0.0):
     """ 
         in_channels : size of the tensor in the channel dimension\n
         backbone_features : number of features generated by the backbone and passed to the classifier heads\n
         num_classes : list of the length of each multi label classifier head\n
     """
-    m = TargetNet(in_channels, backbone_features, dropout_conv)
-    return MultiLabelTargetNet(m, backbone_features, num_classes)
+    m = BasicResnet(in_channels, backbone_features, avgpool_size, filters, blocks,
+                bottleneck, groups, width_per_group, dropout_conv)
+    return MultiTaskTargetNet(m, backbone_features, num_classes)
 
 
 if __name__ == "__main__":
-    device = 'cuda'
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     input_size = 64
-    backbone_features = 128
     in_channels = 3
+    backbone_features = 512
+    avgpool_size = 4  # input_size/16
+    filters = [64, 64, 128, 256, 512]
+    blocks = [3, 4, 6, 3]
+    bottleneck = True
+    groups = 1
+    width_per_group = None
+    dropout_conv = 0.0
+    num_classes = [1, 13, 34, 10, 10]
 
-    num_classes = [13, 10, 34, 10]
-    label_weights = torch.FloatTensor([1.0]*len(num_classes))
-    label_weights = torch.FloatTensor([1.0, 1.0, 10.0, 1.0]).to(device)
-    model = BuildMultiLabelTargetNet(in_channels, backbone_features, num_classes).to(device)
+    model = BuildMultiTaskTargetNet(in_channels, backbone_features, avgpool_size, num_classes, filters, blocks,
+                bottleneck, groups, width_per_group, dropout_conv)
     # print(model)
-    # summary(model, (in_channels, input_size, input_size))
+    summary(model.to(device), (in_channels, input_size, input_size))
+
+    exit()
+
+    """
+    filters = [64, 64, 128, 256, 512]
+    resnet18 [2, 2, 2, 2] bottleneck=False
+    resnet34 [3, 4, 6, 3] bottleneck=False
+    resnet50 [3, 4, 6, 3] bottleneck=True
+    resnet101 [3, 4, 23, 3] bottleneck=True
+    resnet152 [3, 8, 36, 3] bottleneck=True
+    resnext50_32x4d [3, 4, 6, 3] bottleneck=True groups=32, width_per_group=4
+    resnext101_32x8d [3, 4, 23, 3] bottleneck=True groups=32, width_per_group=8
+    """
 
     # fake training loop
 

@@ -11,7 +11,7 @@ import torchvision.transforms as T  # Image processing
 from torch.autograd import Variable
 
 from generate_samples import TargetGenerator
-from model import BuildMultiLabelTargetNet
+from model import BuildMultiTaskTargetNet
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
@@ -34,10 +34,17 @@ class TargetDataset(Dataset):
         return self.transforms(x), torch.tensor(list(y.values()), dtype=torch.long).squeeze()
 
 
-def get_correct(output, target):
+def get_correct_multi_class(output, target):
     pred = torch.max(output, 1)[1]  # second tensor is indicies
     correct = (pred == target).sum().item()
     return correct
+
+def get_correct_scalar(output, target, *args):
+    output = output.squeeze()
+    return angle_correct(output, target, *args)
+
+def angle_correct(output, target, angle_threshold):
+    return (torch.abs(output-target) < angle_threshold).sum().item()
 
 def scalar_loss(output, target):
     """ Loss function when the output is a scalar (not a class distribution). """
@@ -53,29 +60,37 @@ if __name__ == "__main__" and '__file__' in globals():
     # Model Config
     input_size = 64
     in_channels = 3
-    backbone_features = 128
+    backbone_features = 512
+    avgpool_size = 4  # input_size/16
+    filters = [64, 64, 128, 256, 512]
+    blocks = [2, 2, 2, 2]
+    bottleneck = True
+    groups = 1
+    width_per_group = None
+    dropout_conv = 0.0
     # num classes is defined after dataset is made
     # Training Hyperparameters
-    num_epochs = 40
+    num_epochs = 500
     validate = False
-    batch_size = 256
+    batch_size = 128
+    train_size = 4096
+    test_size = 512
     num_workers = 8
     shuffle = False
     drop_last = True
-    dropout_conv = 0.0
-    base_lr = 1e-5
+    base_lr = 1e-2
     momentum = 0.9
     weight_decay = 4e-5
-    lr_milestones = [120, 160]
+    lr_milestones = [150, 440, 480]
     lr_gamma = 0.1
+    angle_threshold = 1/180
     # Dataset config
     target_size = 60
-    scale = (1.0, 1.0)
-    rotation = False
-    train_size = 16384
-    test_size = 1024
-    set_mean = [0.248, 0.194, 0.171]
-    set_std = [0.313, 0.261, 0.253]
+    scale = (0.5, 1.0)
+    rotation = True
+
+    set_mean = [0.536, 0.429, 0.387]
+    set_std = [0.183, 0.176, 0.199]
 
     train_transforms = T.Compose([
         T.ToTensor(),
@@ -121,23 +136,25 @@ if __name__ == "__main__" and '__file__' in globals():
     # Check for cuda
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print('device :', device)
-    model = BuildMultiLabelTargetNet(in_channels, backbone_features, num_classes, dropout_conv).to(device)
+    model = BuildMultiTaskTargetNet(in_channels, backbone_features, avgpool_size, num_classes, filters, blocks,
+                bottleneck, groups, dropout_conv).to(device)
     optimizer = optim.SGD(model.parameters(),
                         lr=base_lr,
                         momentum=momentum,
                         weight_decay=weight_decay)
     criterion = nn.CrossEntropyLoss()
-    scheduler = None # optim.lr_scheduler.MultiStepLR(optimizer, milestones=lr_milestones, gamma=lr_gamma)
+    scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=lr_milestones, gamma=lr_gamma)
 
     # Training
     label_weights = torch.FloatTensor(label_weights).to(device)
-    train_loss = []
-    train_accuracy = []
-    valid_loss = []
-    valid_accuracy = []
+    train_loss = np.zeros((num_epochs, len(num_classes)))
+    train_accuracy = np.zeros((num_epochs, len(num_classes)))
+    valid_loss = np.zeros((num_epochs, len(num_classes)))
+    valid_accuracy = np.zeros((num_epochs, len(num_classes)))
 
-    def train(epoch, model, optimizer, dataloader, criterion, scheduler=None, train=False):
+    def train(epoch, model, optimizer, dataloader, criterion, train=False):
         epoch_loss = 0
+        label_loss_epoch = 0
         total_items = 0
         correct = np.zeros(len(num_classes))
 
@@ -158,43 +175,43 @@ if __name__ == "__main__" and '__file__' in globals():
                     y = target[:, i]
                 if output[i].shape[1] == 1:  # output is a scalar not a class distribution
                     label_loss[i] = scalar_loss(output[i], y)
+                    correct[i] += get_correct_scalar(output[i], y, angle_threshold)
                 else:  # class cross entropy loss
                     # TODO : class weights
                     label_loss[i] = criterion(output[i], y)
-                    correct[i] += get_correct(output[i], y)
+                    correct[i] += get_correct_multi_class(output[i], y)
 
-            # TODO : label weights
-            batch_loss = (label_weights*label_loss).sum()
-            epoch_loss += batch_loss.item()
-            total_items += data.size(0)
+            batch_loss_weighted = (label_weights*label_loss).sum()  # for backprop
+
+            label_loss_epoch += label_loss  # for stats
+            epoch_loss += batch_loss_weighted.item()  # for stats
+            total_items += data.size(0)  # for stats
 
             # print("label_loss :", label_loss)
-            # print("batch_loss :", batch_loss)
+            # print("batch_loss_weighted :", batch_loss_weighted)
 
             # Backwards pass, update learning rates
             if train:
                 optimizer.zero_grad()
-                batch_loss.backward()
+                batch_loss_weighted.backward()
                 optimizer.step()
-                if scheduler:
-                    scheduler.step()
 
         # END BATCH LOOP
 
         # Epoch metrics
         unit_loss = epoch_loss / len(dataloader)
         acc = 100 * correct / total_items
-        # print("correct post:", correct)
+
+        print("label_loss_epoch :", label_loss_epoch.tolist())
         print("acc post :", acc)
-        acc = acc.mean()
-        print("EPOCH {}. train={}. Accuracy={:.2f}%. Loss={:.4f}".format(epoch, train, acc, unit_loss))
+        print("EPOCH {}. train={}. Accuracy={:.2f}%. Loss={:.4f}".format(epoch, train, acc.mean(), unit_loss))
 
         if train:
-            train_loss.append(unit_loss)
-            train_accuracy.append(acc)
+            train_loss[epoch-1] = (label_loss_epoch.cpu().detach().numpy())
+            train_accuracy[epoch-1] = (acc)
         else:
-            valid_loss.append(unit_loss)
-            valid_accuracy.append(acc)
+            valid_loss[epoch-1] = (label_loss_epoch.cpu().detach().numpy())
+            valid_accuracy[epoch-1] = (acc)
 
         
         # TODO : save model
@@ -206,33 +223,57 @@ if __name__ == "__main__" and '__file__' in globals():
         if t > 60: return "{:.2f} minutes".format(t/60)
         else: return "{:.2f} seconds".format(t)
 
+
+    t0 = time.time()
     for epoch in range(num_epochs):
         epoch += 1
-        t0 = time.time()
-        train(epoch, model, optimizer, train_loader, criterion, scheduler, train=True)
+        t1 = time.time()
+        train(epoch, model, optimizer, train_loader, criterion, train=True)
         if validate:
-            train(epoch, model, optimizer, test_loader, criterion, scheduler, train=False)
-        duration = time.time()-t0
-        print("EPOCH {}/{}. Duration={}. Remaing={}".format(epoch, num_epochs, time_to_string(duration), time_to_string(duration*(num_epochs-epoch))))
+            train(epoch, model, optimizer, test_loader, criterion, train=False)
+        duration = time.time()-t1
+        print("EPOCH {}/{}. Epoch Duration={}. Run Duration={}. Remaining={}".format(epoch, num_epochs, time_to_string(duration), time_to_string(time.time()-t0), time_to_string(duration*(num_epochs-epoch))))
+        
+        if scheduler:  # Use pytorch scheduler
+            scheduler.step()
+        else:  # Janky loss scheduler
+            if epoch in lr_milestones:
+                new_lr = lr_gamma * optimizer.param_groups[0]['lr']
+                optimizer.param_groups[0]['lr'] = new_lr
+                print("MILESTONE {}: lr reduced to {}".format(epoch, new_lr))
+
 
     # exit()
+
     # Display loss graphs
-    fig, ax1 = plt.subplots()
+    line_colors = [
+        '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
+        # 'r-', 'y-', 'b-', 'g-'
+    ]
+
+
+    fig, ax = plt.subplots(2, 1)
+
     color = 'tab:red'
-    ax1.set_xlabel('epochs', fontsize=16)
-    ax1.set_ylabel('accuracy %', fontsize=16, color=color)
-    ax1.plot(range(1, len(train_accuracy)+1), train_accuracy, 'r-', label='training accuracy')
-    ax1.plot(range(1, len(valid_accuracy)+1), valid_accuracy, 'y-', label='validation accuracy')
-    ax1.tick_params(axis='y', labelcolor=color)
+    ax[0].set_xlabel('epochs', fontsize=16)
+    ax[0].set_ylabel('accuracy %', fontsize=16, color=color)
+    ax[0].tick_params(axis='y', labelcolor=color)
+    for i in range(len(num_classes)):
+        ax[0].plot(range(1, num_epochs+1), train_accuracy[:,i], color=line_colors[i], label='label={} train acc'.format(i))
+        if validate:
+            ax[0].plot(range(1, num_epochs+1), valid_accuracy[:,i], color=line_colors[i], label='label={} val acc'.format(i))
     plt.legend()
 
-    ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
+    # ax2 = ax1.twinx()  # instantiate a second axes that shares the same x-axis
     color = 'tab:blue'
-    ax2.set_ylabel('loss', fontsize=16, color=color)  # we already handled the x-label with ax1
-    ax2.plot(range(1, len(train_loss)+1), train_loss, 'b-', label='training loss')
-    ax2.plot(range(1, len(valid_loss)+1), valid_loss, 'g-', label='validation loss')
-    ax2.tick_params(axis='y', labelcolor=color)
-    fig.tight_layout()  # otherwise the right y-label is slightly clipped
+    ax[1].set_ylabel('loss', fontsize=16, color=color)  # we already handled the x-label with ax1
+    ax[1].tick_params(axis='y', labelcolor=color)
+    for i in range(len(num_classes)):
+        ax[1].plot(range(1, num_epochs+1), train_loss[:,i], color=line_colors[i], label='label={} train loss'.format(i))
+        if validate:
+            ax[1].plot(range(1, num_epochs+1), valid_loss[:,i], color=line_colors[i], label='label={} val loss'.format(i))
     plt.legend()
+
+    fig.tight_layout()  # otherwise the right y-label is slightly clipped
 
     plt.show()

@@ -20,13 +20,13 @@ def rotate_2d(vector, angle, degrees = False):
 class TargetGenerator():
     def __init__(self):
         self.shape_options = [
-            "circle", "quartercircle", "semicircle", "square",
-            "triangle", "rectangle", "pentagon", "hexagon",
-            "heptagon", "octagon", "star", "cross", "trapezoid"
+            "circle", "semicircle", "quartercircle", "triangle",
+            "square", "rectangle", "trapezoid", "pentagon",
+            "hexagon", "heptagon", "octagon", "star", "cross"
         ]
         self.color_options = [
-            'red', 'orange', 'yellow','green', 'blue',
-            'purple', 'brown', 'gray', 'white', #'black'
+            'white', 'black', 'gray', 'red', 'blue',
+            'green', 'yellow', 'purple', 'brown', 'orange'
         ]
         # No W or 9
         self.letter_options = [
@@ -35,9 +35,6 @@ class TargetGenerator():
             'X', 'Y', 'Z', '1', '2', '3', '4', '5', '6', '7', '8', '0'
         ]
         self.font_options = [
-            "fonts/Aller_Bd.ttf",
-            "fonts/Aller_Lt.ttf",
-            "fonts/DroidSans.ttf",
             "fonts/InputSans-Regular.ttf",
             "fonts/Lato-Black.ttf",
             "fonts/Lato-Bold.ttf",
@@ -53,18 +50,26 @@ class TargetGenerator():
             "fonts/Roboto-Medium.ttf",
             "fonts/Roboto-Regular.ttf",
         ]
+        self.angle_options = [
+            "N", "NE", "E", "SE", "S", "SW", "W", "NW"
+        ]
 
-        # self.shape_options = ["square", "triangle", "rectangle", "pentagon", "hexagon", "heptagon", "octagon"]
-        # self.color_options = ['white', 'blue']
+        # Reduce for debugging
+        # self.shape_options = [
+        #     "circle"
+        # ]
+        # self.color_options = [
+        #     'white', 'black', 'gray', 'red', 'blue',
+        # ]
 
         self.num_classes = [
+            1,
             len(self.shape_options),
-            len(self.color_options),
             len(self.letter_options),
             len(self.color_options),
-            # 1  # orientation
+            len(self.color_options),
         ]
-        self.label_weights = None
+        self.label_weights = None # [1.0, 1.0, 1.4, 1.0, 1.2]
 
 
     def color_to_hsv(self, color):
@@ -89,8 +94,8 @@ class TargetGenerator():
         step = 2*np.pi / sides
         points = []
         for i in range(sides):
-            points.append(radius*np.cos(step*i+angle)+center[0])
-            points.append(radius*np.sin(step*i+angle)+center[1])
+            points.append( (radius*np.cos((step*i) + np.radians(angle))) + center[0] )
+            points.append( (radius*np.sin((step*i) + np.radians(angle))) + center[1] )
         return points
 
 
@@ -110,80 +115,84 @@ class TargetGenerator():
             bot = (cx+r, cy+r)
             draw.pieslice([top, bot], 0, 360, fill=color)
         elif shape == "quartercircle":
+            b = np.random.choice([45, -90, -135, -180])
             # slice is in the bottom right, so shift top right rotated by angle
             rr = 2*r/np.sqrt(2)  # outer circle radius that fits the quarter circle
             ss = rr / (1+np.sqrt(2))  # inner circle radius
-            l = int(ss*np.random.randint(70, 90) / 100)
-            sx, sy = np.sqrt(2)*ss*np.cos(np.radians(angle+45)), np.sqrt(2)*ss*np.sin(np.radians(angle+45))
+            l = int(ss*np.random.randint(75, 90) / 100)
+            sx, sy = np.sqrt(2)*ss*np.cos(np.radians(-angle+45+b)), np.sqrt(2)*ss*np.sin(np.radians(-angle+45+b))
             top = (cx-(rr)-sx, cy-(rr)-sy)
             bot = (cx+(rr)-sx, cy+(rr)-sy)
-            draw.pieslice([top, bot], 0+angle, 90+angle, fill=color)
+            draw.pieslice([top, bot], 0-angle+b, 90-angle+b, fill=color)
         elif shape == "semicircle":
             # slice is in the bottom, so shift up rotated by angle
             rr = r / np.sqrt(5/4)  # outer circle radius that fits the smi circle
             l = int(0.5*rr*np.random.randint(70, 90) / 100)
-            sx, sy = 0, 0
-            sx, sy = 0.5*rr*np.sin(np.radians(angle)), -0.5*rr*np.cos(np.radians(angle))
+            sx, sy = 0.5*rr*np.sin(np.radians(angle)), 0.5*rr*np.cos(np.radians(angle))
             top = (cx-(rr)+sx, cy-(rr)+sy)
             bot = (cx+(rr)+sx, cy+(rr)+sy)
-            draw.pieslice([top, bot], 0+angle, 180+angle, fill=color)
+            draw.pieslice([top, bot], 180-angle, -angle, fill=color)
         elif shape == "square":
             l = int( ( r*np.random.randint(70, 90) ) / ( 100*np.sqrt(2) ) )
             draw.regular_polygon((cx, cy, r), n_sides=4, rotation=angle, fill=color)
         elif shape == "triangle":
             radius = r*np.random.randint(85, 100) / 100
-            l = int(radius*np.random.randint(30, 50) / 100)
-            points = self.make_regular_polygon(radius, 3, angle, center=(cx, cy))
+            l = int(radius*np.random.randint(40, 50) / 100)
+            b = np.random.choice([30, 90])
+            points = self.make_regular_polygon(radius, 3, -angle+b, center=(cx, cy))
             draw.polygon(points, fill=color)
         elif shape == "rectangle":
             h = int(r*np.random.randint(81, 97) / 100)
             w = np.sqrt(r*r - h*h)
-            l = int(min(w, h)*np.random.randint(70, 90) / 100)
+            l = int(min(w, h)*np.random.randint(85, 96) / 100)
+            b = np.random.choice([0, 90])
             points = [( +w, +h ),( +w, -h ),( -w, -h ),( -w, +h )]
-            points = rotate_2d(points, angle, degrees=True)
+            points = rotate_2d(points, angle+b, degrees=True)
             points = [(x[0]+cx, x[1]+cy) for x in points]
             draw.polygon(points, fill=color)
         elif shape == "pentagon":
             radius = r*np.random.randint(80, 100) / 100
             l = int(radius*np.random.randint(50, 75) / 100)
-            points = self.make_regular_polygon(radius, 5, angle, center=(cx, cy))
+            b = -90/5
+            points = self.make_regular_polygon(radius, 5, -angle+b, center=(cx, cy))
             draw.polygon(points, fill=color)
         elif shape == "hexagon":
             radius = r*np.random.randint(80, 100) / 100
             l = int(radius*np.random.randint(50, 80) / 100)
-            points = self.make_regular_polygon(radius, 6, angle, center=(cx, cy))
+            points = self.make_regular_polygon(radius, 6, -angle, center=(cx, cy))
             draw.polygon(points, fill=color)
         elif shape == "heptagon":
             radius = r*np.random.randint(80, 100) / 100
             l = int(radius*np.random.randint(50, 85) / 100)
-            points = self.make_regular_polygon(radius, 7, angle, center=(cx, cy))
+            points = self.make_regular_polygon(radius, 7, -angle, center=(cx, cy))
             draw.polygon(points, fill=color)
         elif shape == "octagon":
             radius = r*np.random.randint(80, 100) / 100
             l = int(radius*np.random.randint(50, 85) / 100)
-            points = self.make_regular_polygon(radius, 8, angle, center=(cx, cy))
+            points = self.make_regular_polygon(radius, 8, -angle, center=(cx, cy))
             draw.polygon(points, fill=color)
         elif shape == "star":
             sides = 5
             step = 2*np.pi / sides
-            b = -np.pi/2
+            b = -90  # np.random.choice([-90, 90])
             points = []
             c = r*np.random.randint(80, 100) / 100
             for i in (0, 2, 4, 1, 3):
-                points.append(c*np.cos(step*i+angle+b)+cx)
-                points.append(c*np.sin(step*i+angle+b)+cy)
+                points.append( (c*np.cos((step*i) + np.radians(-angle+b))) + cx )
+                points.append( (c*np.sin((step*i) + np.radians(-angle+b))) + cy )
             draw.polygon(points, fill=color)
             ratio = 1-np.sin(np.radians(36))*(np.tan(np.radians(18))+np.tan(np.radians(36)))
-            l = int(c*ratio*np.random.randint(70, 95) / 100)
-            points = self.make_regular_polygon(c*ratio, 5, angle+step/2+b, center=(cx, cy))
+            l = int(c*ratio*np.random.randint(80, 95) / 100)
+            points = self.make_regular_polygon(c*ratio, 5, -angle+b-180, center=(cx, cy))
             draw.polygon(points, fill=color)
         elif shape == "cross":
-            h = int(r*np.random.randint(25, 55) / 100)
+            h = int(r*np.random.randint(35, 43) / 100)
             w = np.sqrt(r*r - h*h)
-            l = int(min(w, h)*np.random.randint(80, 97) / 100)
+            l = int(min(w, h)*np.random.randint(92, 99) / 100)
+            b = np.random.choice([0, 45])
             points = [( +w, +h ),( +w, -h ),( -w, -h ),( -w, +h )]
-            points1 = [(x[0]+cx, x[1]+cy) for x in rotate_2d(points, angle, degrees=True)]
-            points2 = [(x[0]+cx, x[1]+cy) for x in rotate_2d(points, angle+90, degrees=True)]
+            points1 = [(x[0]+cx, x[1]+cy) for x in rotate_2d(points, angle+b, degrees=True)]
+            points2 = [(x[0]+cx, x[1]+cy) for x in rotate_2d(points, angle+90+b, degrees=True)]
             draw.polygon(points1, fill=color)
             draw.polygon(points2, fill=color)
         elif shape == "trapezoid":
@@ -214,16 +223,17 @@ class TargetGenerator():
         return img
 
     def draw_target(self, img_size, target_size, scale=(1.0, 1.0), rotation=False):
-        # Create a tranparent image to overlay on background images
-        img = Image.new('RGBA', size=(img_size, img_size), color=(0, 0, 0, 0))
-        draw = ImageDraw.Draw(img)
-
         # Create the label with uniform random sampling
-        shape_color_idx, letter_color_idx = np.random.choice(range(len(self.color_options)), 2, replace=False)
+        bkg_idx, shape_color_idx, letter_color_idx = np.random.choice(range(len(self.color_options)), 3, replace=False)
         shape_idx = np.random.randint(0, len(self.shape_options))
-        # shape_color_idx = np.random.randint(0, len(self.color_options))
         letter_idx = np.random.randint(0, len(self.letter_options))
-        # letter_color_idx = np.random.randint(0, len(self.color_options))
+
+        bkg_color = self.color_to_hsv(self.color_options[bkg_idx])
+
+        # Create a tranparent image to overlay on background images
+        # img = Image.new('RGBA', size=(img_size, img_size), color=(0, 0, 0, 0))
+        img = Image.new('RGBA', size=(img_size, img_size), color=bkg_color)
+        draw = ImageDraw.Draw(img)
 
         # Render the target from the label choices
         shape_color = self.color_to_hsv(self.color_options[shape_color_idx])
@@ -238,13 +248,13 @@ class TargetGenerator():
 
         img = img.convert('RGB')
         # img = np.array(img, dtype='uint8')
-
+        if -orientation < -180: orientation -=360
         label = {
+            "orientation": -orientation/180,
             "shape": shape_idx,
-            "shape_color": shape_color_idx,
             "letter": letter_idx,
+            "shape_color": shape_color_idx,
             "letter_color": letter_color_idx,
-            # "orientation": (orientation-180)/360
         }
         return img, label
 
@@ -255,14 +265,31 @@ if __name__ == "__main__":
 
     img_size = 64
     target_size = 60
-    scale = (1.0, 1.0)
-    rotation = False
+    scale = (0.5, 1.0)
+    rotation = True
 
-    # x, y = gen.draw_target(img_size, target_size)
+    # x, y = gen.draw_target(img_size, target_size, scale=scale, rotation=rotation)
     # x.show()
+    # print(y)
     # exit()
 
-    nimg = 4000
+    nrows = 8
+    ncols = 16
+    rows = []
+    for i in range(nrows):
+        row = []
+        for j in range(ncols):
+            img, label = gen.draw_target(img_size, target_size, scale=scale, rotation=rotation)
+            row.append(img)
+        rows.append( np.hstack(row) )
+    grid_img = np.vstack(rows)
+    print(grid_img.shape)
+    im = Image.fromarray(grid_img.astype('uint8'), 'RGB')
+    im.show()
+
+    # exit()
+
+    nimg = 8000
     mean = 0.0
     var = 0.0
     for i in range(nimg):
@@ -277,17 +304,3 @@ if __name__ == "__main__":
     std = np.sqrt(var/nimg)
     print("mean :", mean)
     print("std :", std)
-
-    nrows = 8
-    ncols = 16
-    rows = []
-    for i in range(nrows):
-        row = []
-        for j in range(ncols):
-            img, label = gen.draw_target(img_size, target_size, scale=scale)
-            row.append(img)
-        rows.append( np.hstack(row) )
-    grid_img = np.vstack(rows)
-    print(grid_img.shape)
-    im = Image.fromarray(grid_img.astype('uint8'), 'RGB')
-    im.show()
