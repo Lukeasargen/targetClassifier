@@ -79,9 +79,13 @@ class BasicResnet(nn.Module):
             kernel_size=(1, 1), stride=1, padding=0, bias=True)
         self.avgpool = nn.AvgPool2d(avgpool_size)
 
-        # TODO : Intialize shortcut branches
-        # Batch norms should be weight 1 and bias 0
-        # kaiming normal for all convs
+        """ https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py """
+        for m in self.modules():
+            if isinstance(m, nn.Conv2d):
+                nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
     
     def _create_block(self, in_channels, out_channels, stride, n, bottleneck, groups, width_per_group):
         layers = []
