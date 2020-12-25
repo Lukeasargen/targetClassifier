@@ -154,13 +154,13 @@ if __name__ == "__main__":
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     input_size = 64
     in_channels = 3
-    backbone_features = 512
+    backbone_features = 2048
     avgpool_size = 4  # input_size/16
-    filters = [64, 64, 128, 256, 512]
+    filters = [64, 256, 512, 1024, 2048]
     blocks = [3, 4, 6, 3]
     bottleneck = True
-    groups = 1
-    width_per_group = None
+    groups = 32
+    width_per_group = 4
     dropout_conv = 0.0
     num_classes = [1, 13, 34, 10, 10]
 
@@ -175,6 +175,8 @@ if __name__ == "__main__":
     filters = [64, 64, 128, 256, 512]
     resnet18 [2, 2, 2, 2] bottleneck=False
     resnet34 [3, 4, 6, 3] bottleneck=False
+
+    filters = [64, 256, 512, 1024, 2048]
     resnet50 [3, 4, 6, 3] bottleneck=True
     resnet101 [3, 4, 23, 3] bottleneck=True
     resnet152 [3, 8, 36, 3] bottleneck=True

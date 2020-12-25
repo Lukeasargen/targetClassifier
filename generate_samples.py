@@ -59,7 +59,7 @@ class TargetGenerator():
         #     "circle"
         # ]
         # self.color_options = [
-        #     'white', 'black', 'gray', 'red', 'blue',
+        #     'white', 'black', 'gray', #'red', 'blue',
         # ]
 
         self.num_classes = [
@@ -69,8 +69,6 @@ class TargetGenerator():
             len(self.color_options),
             len(self.color_options),
         ]
-        self.label_weights = None # [1.0, 1.0, 1.4, 1.0, 1.2]
-
 
     def color_to_hsv(self, color):
         options = {
@@ -89,7 +87,6 @@ class TargetGenerator():
         color_code = 'hsl(%d, %d%%, %d%%)' % (h, s, l)
         return color_code
 
-
     def make_regular_polygon(self, radius, sides, angle, center=(0,0)):
         step = 2*np.pi / sides
         points = []
@@ -97,7 +94,6 @@ class TargetGenerator():
             points.append( (radius*np.cos((step*i) + np.radians(angle))) + center[0] )
             points.append( (radius*np.sin((step*i) + np.radians(angle))) + center[1] )
         return points
-
 
     def draw_shape(self, draw, img_size, target_size, shape_idx, color,
             scale=(1.0, 1.0), rotation=False):
@@ -286,6 +282,7 @@ if __name__ == "__main__":
     print(grid_img.shape)
     im = Image.fromarray(grid_img.astype('uint8'), 'RGB')
     im.show()
+    # im.save("targets.jpeg")
 
     # exit()
 

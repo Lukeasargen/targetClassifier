@@ -12,5 +12,36 @@ todo
 -label weights, "Multi-Task Learning Using Uncertainty to Weigh Losses for Scene Geometry and Semantics"
 -class weights, some classes are more difficult
 -model save after epochs
--visualize the metrics, confusion matrix, make jupyter notebook
 
+-visualize the metrics, confusion matrix, make jupyter notebook
+    -by class, accuracy, precision, recall, specificty, f1 score, matthews coreelation coefficient, confusion matrix
+
+-trainer class, holds the training state, can be saved and loaded for resuming training
+-load saved model function
+
+
+for visualizing final model outputs
+
+mean , std = torch.tensor([0.485, 0.456, 0.406]),torch.tensor([0.229, 0.224, 0.225])
+def denormalize(image):
+  image = image.to("cpu").clone().detach()
+  image = transforms.Normalize(-mean/std,1/std)(image) #denormalize
+  image = image.permute(1,2,0) 
+  image = torch.clamp(image,0,1)
+  return image.numpy()
+
+def visualize(image , actual , pred):
+  fig,ax = plt.subplots()
+  ax.imshow(denormalize(image))
+  ax.grid(False)
+  classes =  np.array(classLabels)[np.array(actual,dtype=np.bool)]
+  for i , s in enumerate(classes):
+    ax.text(0 , i*20  , s , verticalalignment='top', color="white", fontsize=16, weight='bold')
+  
+  classes =  np.array(classLabels)[np.array(pred,dtype=np.bool)]
+  for i , s in enumerate(classes):
+    ax.text(160 , i*20  , s , verticalalignment='top', color="black", fontsize=16, weight='bold')
+
+  plt.show()
+
+visualize(image[1] , label[1].tolist() , output[1].tolist())
