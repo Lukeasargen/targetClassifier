@@ -102,7 +102,9 @@ class BasicResnet(nn.Module):
         out = self.block1(out)
         out = self.dropout_conv(out)
         out = self.block2(out)
+        out = self.dropout_conv(out)
         out = self.block3(out)
+        out = self.dropout_conv(out)
         out = self.block4(out)
         out = self.avgpool(out)
         out = self.last_conv(out)
@@ -154,15 +156,15 @@ if __name__ == "__main__":
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     input_size = 64
     in_channels = 3
-    backbone_features = 2048
+    backbone_features = 512
     avgpool_size = 4  # input_size/16
-    filters = [64, 256, 512, 1024, 2048]
+    filters = [64, 64, 128, 256, 512]
     blocks = [3, 4, 6, 3]
-    bottleneck = True
-    groups = 32
-    width_per_group = 4
+    bottleneck = False
+    groups = 1
+    width_per_group = None
     dropout_conv = 0.0
-    num_classes = [1, 13, 34, 10, 10]
+    num_classes = [16, 13, 34, 10, 10]
 
     model = BuildMultiTaskTargetNet(in_channels, backbone_features, avgpool_size, num_classes, filters, blocks,
                 bottleneck, groups, width_per_group, dropout_conv)

@@ -4,17 +4,19 @@ import time  # Time training
 import datetime
 import numpy as np  # Random selection
 import matplotlib.pyplot as plt
+from PIL import Image
 import torch  # Tensor library
 import torch.nn as nn  # loss functinos
 import torch.optim as optim  # Optimization and schedulers
-from torch.utils.data import Dataset, DataLoader  # Building custom datasets
+from torch.utils.data import DataLoader  # Building custom datasets
 import torchvision.transforms as T  # Image processing
 from torch.autograd import Variable
 
-from generate_samples import TargetGenerator
 from model import BuildMultiTaskTargetNet
+from dataset import TargetDataset, CustomTransformation
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
 
 class Logger():
     def __init__(self, name):
@@ -28,39 +30,21 @@ class Logger():
         pass
 
 
-# Data loader class
-class TargetDataset(Dataset):
-    def __init__(self, transforms, input_size, target_size, length, scale, rotation):
-        self.transforms = transforms
-        self.gen = TargetGenerator()
-        self.length = length
-        self.input_size = input_size
-        self.target_size = target_size
-        self.scale = scale
-        self.rotation = rotation
-
-    def __len__(self):
-        return self.length
-
-    def __getitem__(self, idx):
-        x, y = self.gen.draw_target(self.input_size, self.target_size, self.scale, self.rotation)
-        return self.transforms(x), torch.tensor(list(y.values()), dtype=torch.float).squeeze()
-
-
 class WeightedTaskLoss(nn.Module):
     """ https://arxiv.org/abs/1703.04977 """
     def __init__(self, num_tasks):
         super(WeightedTaskLoss, self).__init__()
         self.num_tasks = num_tasks
-        self.sigma = nn.Parameter(torch.ones(num_tasks))
+        self.sigma = nn.Parameter(torch.zeros(num_tasks))
 
     def forward(self, tasks_loss):
         # sigma is 1
-        # epsilon = 1e-9
+        # epsilon = 10e-9
         # precision  = (0.5*tasks_loss/(self.sigma+epsilon)**2).sum()
         # loss = precision + torch.log(torch.prod(self.sigma+epsilon))
         loss = (torch.exp(-self.sigma) * tasks_loss + self.sigma).sum()
         return loss
+
 
 def get_correct_multi_class(output, target):
     pred = torch.max(output, 1)[1]  # second tensor is indicies
@@ -84,26 +68,27 @@ def scalar_loss(output, target):
     # loss_func = nn.MSELoss()
     return loss_func(output.squeeze(), target)
 
+
 if __name__ == "__main__" and '__file__' in globals():
-    MANUAL_SEED = 104
+    MANUAL_SEED = 103
     torch.manual_seed(MANUAL_SEED)
     torch.cuda.manual_seed(MANUAL_SEED)
     np.random.seed(MANUAL_SEED)
     # Model Config
     input_size = 64
     in_channels = 3
-    backbone_features = 2048
+    backbone_features = 512
     avgpool_size = 4  # input_size/16
-    filters = [64, 256, 512, 1024, 2048]
+    filters = [64, 64, 128, 256, 512]
     blocks = [3, 4, 6, 3]
-    bottleneck = True
-    groups = 32
-    width_per_group = 4
+    bottleneck = False
+    groups = 1
+    width_per_group = None
     dropout_conv = 0.0
     # num_classes is defined by the dataset
     # Training Hyperparameters
-    num_epochs = 250
-    validate = False
+    num_epochs = 90
+    validate = True
     batch_size = 128
     train_size = 4096
     test_size = 512
@@ -112,68 +97,68 @@ if __name__ == "__main__" and '__file__' in globals():
     drop_last = True
     base_lr = 1e-2
     momentum = 0.9
-    weight_decay = 4e-5
-    lr_milestones = [210, 230, 240]
+    weight_decay = 0  # 0, 1e-5, 3e-5, 1e-4, 3e-4, 1e-4, 1e-3
+    use_fp16 = True
+    lr_milestones = [60, 70, 80]
     lr_gamma = 0.1
-    angle_threshold = 10/180
+    use_lr_ramp_up = True
+    lr_ramp_base = 1e-4
+    lr_ramp_steps = 4
+    angle_threshold = 22.5/180  # scalar angle accuracy
     # Dataset config
     target_size = 60
-    scale = (0.5, 1.0)
+    scale = (0.4, 1.0)
     rotation = True
 
-    set_mean = [0.538, 0.427, 0.380]
-    set_std = [0.183, 0.175, 0.200]
+    set_mean = [0.531, 0.420, 0.372]
+    set_std = [0.166, 0.161, 0.180]
 
     train_transforms = T.Compose([
+        CustomTransformation(),
+        # T.RandomPerspective(distortion_scale=0.5, p=0.5, interpolation=Image.BICUBIC),
+        T.Resize((input_size)),  # Make shortest edge this size
         T.ToTensor(),
         T.Normalize(mean=set_mean, std=set_std)
     ])
     test_transforms = T.Compose([
+        T.Resize((input_size)),  # Make shortest edge this size
         T.ToTensor(),
         T.Normalize(mean=set_mean, std=set_std)
     ])
 
-    train_dataset = TargetDataset(transforms=train_transforms, input_size=input_size,
-        target_size=target_size, length=train_size, scale=scale, rotation=rotation)
+    train_dataset = TargetDataset(transforms=train_transforms, input_size=2*input_size,
+        target_size=2*target_size, length=train_size, scale=scale, rotation=rotation)
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size
         ,shuffle=shuffle, num_workers=num_workers, drop_last=drop_last)
 
-    test_dataset = TargetDataset(transforms=test_transforms, input_size=input_size,
-        target_size=target_size, length=test_size, scale=scale, rotation=rotation)
+    test_dataset = TargetDataset(transforms=test_transforms, input_size=2*input_size,
+        target_size=2*target_size, length=test_size, scale=scale, rotation=rotation)
     test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size)
 
     num_classes = test_dataset.gen.num_classes
     print("num_classes :", num_classes)
-
-    # Time dataloader
-    # import time
-    # for i in range(9):
-    #     train_loader = DataLoader(
-    #         dataset=train_dataset
-    #         ,batch_size=batch_size
-    #         ,shuffle=shuffle
-    #         ,num_workers=i
-    #         ,drop_last=drop_last)
-    #     t0 = time.time()
-    #     for batch_idx, (data, target) in enumerate(train_loader):
-    #         pass
-    #     print("{:.6f} seconds with {} workers.".format(time.time()-t0, i))
-    # exit()
 
     # Check for cuda
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print('device :', device)
     model = BuildMultiTaskTargetNet(in_channels, backbone_features, avgpool_size, num_classes, filters, blocks,
                 bottleneck, groups, dropout_conv).to(device)
+    if use_fp16:
+        model = model.half()
     weighted_loss_citerion = None #WeightedTaskLoss(num_tasks=len(num_classes)).to(device)
     params = [{'params': model.parameters(), 'lr': base_lr}]
     if weighted_loss_citerion:
-        params.append({'params': weighted_loss_citerion.parameters(), 'lr': base_lr/100})
+        params.append({'params': weighted_loss_citerion.parameters(), 'lr': base_lr})
     optimizer = optim.SGD(params,
                         lr=base_lr,
                         momentum=momentum,
                         weight_decay=weight_decay)
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=lr_milestones, gamma=lr_gamma)
+
+    if use_lr_ramp_up:
+        print("LR RAMP from {} with {} steps.".format(lr_ramp_base, lr_ramp_steps))
+        for group in optimizer.param_groups:
+            group["lr"] = lr_ramp_base
 
     # Training
     train_loss = np.zeros((num_epochs, len(num_classes)))
@@ -193,8 +178,12 @@ if __name__ == "__main__" and '__file__' in globals():
         else:
             model.eval()
 
+        c = 0
         for batch_idx, (data, target) in enumerate(dataloader):
+            c +=1
             data, target = data.to(device), target.to(device)
+            if use_fp16:
+                data = data.half()
             output = model(data)
 
             # Computing the loss and training metrics
@@ -233,13 +222,9 @@ if __name__ == "__main__" and '__file__' in globals():
             # print("sum :", tasks_loss.sum())
             # print("batch_loss :", batch_loss)
 
-
             tasks_loss_epoch += tasks_loss  # for stats
             epoch_loss += batch_loss.item()  # for stats
             total_items += data.size(0)  # for stats
-
-            # print("tasks_loss :", tasks_loss)
-            # print("batch_loss :", batch_loss)
 
             # Backwards pass, update learning rates
             if train:
@@ -253,20 +238,19 @@ if __name__ == "__main__" and '__file__' in globals():
         unit_loss = epoch_loss / len(dataloader)
         acc = 100 * correct / total_items
 
-        print("tasks_loss_epoch :", tasks_loss_epoch.tolist())
+        # print("tasks_loss_epoch :", tasks_loss_epoch.tolist())
         print("acc post :", acc)
         print("EPOCH {}. train={}. Accuracy={:.2f}%. Loss={:.4f}".format(epoch, train, acc.mean(), unit_loss))
 
         if train:
-            train_loss[epoch-1] = (tasks_loss_epoch.detach().cpu().numpy())
+            train_loss[epoch-1] = (tasks_loss_epoch.detach().cpu().numpy()/c)
             train_accuracy[epoch-1] = (acc)
             if weighted_loss_citerion:
                 sigma[epoch-1] = weighted_loss_citerion.sigma.data.detach().cpu().numpy()
         else:
-            valid_loss[epoch-1] = (tasks_loss_epoch.detach().cpu().numpy())
+            valid_loss[epoch-1] = (tasks_loss_epoch.detach().cpu().numpy()/c)
             valid_accuracy[epoch-1] = (acc)
 
-        
         # TODO : save model
 
         # END TRAIN FUNCTION
@@ -275,7 +259,6 @@ if __name__ == "__main__" and '__file__' in globals():
         if t > 3600: return "{:.2f} hours".format(t/3600)
         if t > 60: return "{:.2f} minutes".format(t/60)
         else: return "{:.2f} seconds".format(t)
-
 
     t0 = time.time()
     for epoch in range(num_epochs):
@@ -287,6 +270,12 @@ if __name__ == "__main__" and '__file__' in globals():
         duration = time.time()-t1
         print("EPOCH {}/{}. Epoch Duration={}. Run Duration={}. Remaining={}".format(epoch, num_epochs, time_to_string(duration), time_to_string(time.time()-t0), time_to_string(duration*(num_epochs-epoch))))
         
+        if use_lr_ramp_up and (epoch-1) < lr_ramp_steps:
+            new_lr = lr_ramp_base + (epoch)*((base_lr-lr_ramp_base)/lr_ramp_steps)
+            print("LR RAMP UP. Step {}. lr set to {:.6f}".format(epoch, new_lr))
+            for group in optimizer.param_groups:
+                group["lr"] = new_lr
+
         if scheduler:  # Use pytorch scheduler
             scheduler.step()
         else:  # Janky loss scheduler
@@ -294,14 +283,14 @@ if __name__ == "__main__" and '__file__' in globals():
                 new_lr = lr_gamma * optimizer.param_groups[0]['lr']
                 optimizer.param_groups[0]['lr'] = new_lr
                 print("MILESTONE {}: lr reduced to {}".format(epoch, new_lr))
-
+        
+        # END TRAIN LOOP
 
     # exit()
 
     # Display loss graphs
     line_colors = [
         '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
-        # 'r-', 'y-', 'b-', 'g-'
     ]
     labels_str = [
         "Orientation", "Shape", "Letter", "Shape Color", "Letter Color"
@@ -320,7 +309,7 @@ if __name__ == "__main__" and '__file__' in globals():
     for i in range(len(num_classes)):
         ax[0].plot(range(1, num_epochs+1), train_accuracy[:,i], color=line_colors[i], label=labels_str[i])
         if validate:
-            ax[0].plot(range(1, num_epochs+1), valid_accuracy[:,i], color=line_colors[i], label=labels_str[i])
+            ax[0].plot(range(1, num_epochs+1), valid_accuracy[:,i], color=line_colors[i], linestyle='dashed')
 
     color = 'tab:blue'
     ax[1].set_ylabel('loss', fontsize=16, color=color)  # we already handled the x-label with ax1
@@ -328,7 +317,7 @@ if __name__ == "__main__" and '__file__' in globals():
     for i in range(len(num_classes)):
         ax[1].plot(range(1, num_epochs+1), train_loss[:,i], color=line_colors[i], label=labels_str[i])
         if validate:
-            ax[1].plot(range(1, num_epochs+1), valid_loss[:,i], color=line_colors[i], label=labels_str[i])
+            ax[1].plot(range(1, num_epochs+1), valid_loss[:,i], color=line_colors[i], linestyle='dashed')
 
     if weighted_loss_citerion:
         color = 'tab:green'
