@@ -53,6 +53,7 @@ class TargetGenerator():
         self.angle_options = [
             "N", "NE", "E", "SE", "S", "SW", "W", "NW"
         ]
+        self.angle_quantization = 16
 
         # Reduce for debugging
         # self.shape_options = [
@@ -63,7 +64,7 @@ class TargetGenerator():
         # ]
 
         self.num_classes = [
-            1,
+            self.angle_quantization,
             len(self.shape_options),
             len(self.letter_options),
             len(self.color_options),
@@ -235,18 +236,25 @@ class TargetGenerator():
         shape_color = self.color_to_hsv(self.color_options[shape_color_idx])
         (cx, cy), l, angle = self.draw_shape(draw, img_size, target_size, shape_idx, shape_color,
             scale=scale, rotation=rotation)
-        letter_angle_offset = 0
+        letter_angle_offset = 4
         orientation = (angle + np.random.uniform(-letter_angle_offset, letter_angle_offset)) % 360
         letter_color = self.color_to_hsv(self.color_options[letter_color_idx])
         letter_mark = self.draw_letter(draw, l, letter_idx, letter_color, orientation)
         ox, oy = letter_mark.size
-        img.paste(letter_mark, (cx-ox//2, cy-oy//2), letter_mark)
+        img.paste(letter_mark, (cx-ox//2, cy-1-oy//2), letter_mark)
 
         img = img.convert('RGB')
         # img = np.array(img, dtype='uint8')
-        if -orientation < -180: orientation -=360
+
+        # Mapp angle from (-180,180) to (-1,1)
+        # if -orientation < -180: orientation -=360
+        # orientation = -orientation/180
+
+        # Quantize angle in cw direction
+        orientation = int(np.floor((360-orientation)*self.angle_quantization/360))
+
         label = {
-            "orientation": -orientation/180,
+            "orientation": orientation,
             "shape": shape_idx,
             "letter": letter_idx,
             "shape_color": shape_color_idx,
@@ -261,7 +269,7 @@ if __name__ == "__main__":
 
     img_size = 64
     target_size = 60
-    scale = (0.5, 1.0)
+    scale = (0.4, 1.0)
     rotation = True
 
     # x, y = gen.draw_target(img_size, target_size, scale=scale, rotation=rotation)
@@ -284,20 +292,5 @@ if __name__ == "__main__":
     im.show()
     # im.save("targets.jpeg")
 
-    # exit()
+    exit()
 
-    nimg = 8000
-    mean = 0.0
-    var = 0.0
-    for i in range(nimg):
-        # img in shape [W, H, C]
-        img, y = gen.draw_target(img_size, target_size, scale=scale, rotation=rotation)
-        # img = np.random.normal(size=(img_size, img_size, 3)) * 255
-        # [1, C, H, W], expand so that the mean function can run on dim=0
-        img = np.expand_dims((np.array(img) / 255.).transpose((2, 1, 0)), axis=0)
-        mean += np.mean(img, axis=(0, 2, 3))
-        var += np.var(img, axis=(0, 2, 3))  # you can add var, not std
-    mean = mean/nimg
-    std = np.sqrt(var/nimg)
-    print("mean :", mean)
-    print("std :", std)
