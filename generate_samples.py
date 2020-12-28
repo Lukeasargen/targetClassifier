@@ -30,9 +30,11 @@ class TargetGenerator():
         ]
         # No W or 9
         self.letter_options = [
-            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K',
-            'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V',
-            'X', 'Y', 'Z', '1', '2', '3', '4', '5', '6', '7', '8', '0'
+            'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
+            'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+            'Q', 'R', 'S', 'T', 'U', 'V', 'X', 'Y',
+            'Z', '1', '2', '3', '4', '5', '6', '7',
+            '8', '0'
         ]
         self.font_options = [
             "fonts/InputSans-Regular.ttf",
@@ -57,10 +59,10 @@ class TargetGenerator():
 
         # Reduce for debugging
         # self.shape_options = [
-        #     "circle"
+        #     "star"
         # ]
         # self.color_options = [
-        #     'white', 'black', 'gray', #'red', 'blue',
+        #     'white', 'black', 'gray',
         # ]
 
         self.num_classes = [
@@ -173,7 +175,7 @@ class TargetGenerator():
             step = 2*np.pi / sides
             b = -90  # np.random.choice([-90, 90])
             points = []
-            c = r*np.random.randint(80, 100) / 100
+            c = r*np.random.randint(94, 100) / 100
             for i in (0, 2, 4, 1, 3):
                 points.append( (c*np.cos((step*i) + np.radians(-angle+b))) + cx )
                 points.append( (c*np.sin((step*i) + np.radians(-angle+b))) + cy )
@@ -236,7 +238,7 @@ class TargetGenerator():
         shape_color = self.color_to_hsv(self.color_options[shape_color_idx])
         (cx, cy), l, angle = self.draw_shape(draw, img_size, target_size, shape_idx, shape_color,
             scale=scale, rotation=rotation)
-        letter_angle_offset = 4
+        letter_angle_offset = 0
         orientation = (angle + np.random.uniform(-letter_angle_offset, letter_angle_offset)) % 360
         letter_color = self.color_to_hsv(self.color_options[letter_color_idx])
         letter_mark = self.draw_letter(draw, l, letter_idx, letter_color, orientation)
@@ -251,7 +253,8 @@ class TargetGenerator():
         # orientation = -orientation/180
 
         # Quantize angle in cw direction
-        orientation = int(np.floor((360-orientation)*self.angle_quantization/360))
+        # mod by quantization to avoid error at 0 degrees (rotation=False)        
+        orientation = int(np.floor((360-orientation)*(self.angle_quantization)/360)) % self.angle_quantization
 
         label = {
             "orientation": orientation,

@@ -62,22 +62,35 @@ class ResidualBlock(nn.Module):
 class BasicResnet(nn.Module):
     def __init__(self, in_channels, out_features, avgpool_size,
             filters=[64, 64, 128, 256, 512], blocks=[2, 2, 2, 2], bottleneck=False,
-            groups=1, width_per_group=None, dropout_conv=0.0):
+            groups=1, width_per_group=None):
         super(BasicResnet, self).__init__()
+        self.in_channels = in_channels
+        self.out_features = out_features
+        self.avgpool_size = avgpool_size
+        self.filters = filters
+        self.blocks = blocks
+        self.bottleneck = bottleneck
+        self.groups = groups
+        self.width_per_group = width_per_group
+        self.num_blocks = len(blocks)
+        
         self.conv1 = nn.Sequential(
             nn.Conv2d(in_channels=in_channels, out_channels=filters[0],
                 kernel_size=(7, 7), stride=2, padding=3, bias=True),
             nn.BatchNorm2d(filters[0]),
             nn.ReLU()
         )
-        self.dropout_conv = nn.Dropout2d(p=dropout_conv)
-        self.block1 = self._create_block(filters[0], filters[1], 1, blocks[0], bottleneck, groups, width_per_group)
-        self.block2 = self._create_block(filters[1], filters[2], 2, blocks[1], bottleneck, groups, width_per_group)
-        self.block3 = self._create_block(filters[2], filters[3], 2, blocks[2], bottleneck, groups, width_per_group)
-        self.block4 = self._create_block(filters[3], filters[4], 2, blocks[3], bottleneck, groups, width_per_group)
-        self.last_conv = nn.Conv2d(in_channels=filters[4], out_channels=out_features,
-            kernel_size=(1, 1), stride=1, padding=0, bias=True)
+
+        assert (len(filters)-1)==len(blocks), "filters and blocks length do not match."
+        for idx, num in enumerate(blocks):
+            stride = 2
+            if idx == 0: stride=1
+            setattr(self, "Block"+str(idx), self._create_block(filters[idx], filters[idx+1], stride, blocks[idx], bottleneck, groups, width_per_group))
         self.avgpool = nn.AvgPool2d(avgpool_size)
+
+        # Remove last conv because each classifier head gets the averaged feature maps as input
+        # self.last_conv = nn.Conv2d(in_channels=filters[4], out_channels=out_features,
+        #     kernel_size=(1, 1), stride=1, padding=0, bias=True)
 
         """ https://github.com/pytorch/vision/blob/master/torchvision/models/resnet.py """
         for m in self.modules():
@@ -96,18 +109,15 @@ class BasicResnet(nn.Module):
                 layers.append(ResidualBlock(out_channels, out_channels, 1, bottleneck, groups, width_per_group))
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, dropout_conv=0.0):
+        drop_conv_layer = nn.Dropout2d(p=dropout_conv)
         out = self.conv1(x)
-        out = self.dropout_conv(out)
-        out = self.block1(out)
-        out = self.dropout_conv(out)
-        out = self.block2(out)
-        out = self.dropout_conv(out)
-        out = self.block3(out)
-        out = self.dropout_conv(out)
-        out = self.block4(out)
+        out = drop_conv_layer(out)
+        for idx in range(self.num_blocks):
+            out = eval("self.Block" + str(idx))(out)
+            out = drop_conv_layer(out)
         out = self.avgpool(out)
-        out = self.last_conv(out)
+        # out = self.last_conv(out)
         return out
 
 
@@ -115,10 +125,11 @@ class MultiTaskTargetNet(nn.Module):
     def __init__(self, basemodel, backbone_features, num_classes):
         super(MultiTaskTargetNet, self).__init__()
         self.basemodel = basemodel
+        self.backbone_features = backbone_features
         self.num_classes = num_classes
         # make the multi label heads
         for index, num in enumerate(num_classes):
-            setattr(self, "ClassifierHead_" + str(index), self._make_classifier(backbone_features, num))
+            setattr(self, "ClassifierHead_"+str(index), self._make_classifier(backbone_features, num))
     
     def _make_classifier(self, in_features, num_classes):
         head = nn.Sequential(OrderedDict([
@@ -130,8 +141,8 @@ class MultiTaskTargetNet(nn.Module):
         ]))
         return head
 
-    def forward(self, x):
-        x = self.basemodel.forward(x)
+    def forward(self, x, dropout_conv=0.0):
+        x = self.basemodel.forward(x, dropout_conv)
         # forward the label heads
         outs = list()
         for index in range(len(self.num_classes)):
@@ -139,35 +150,37 @@ class MultiTaskTargetNet(nn.Module):
             outs.append(out)
         return outs
 
-def BuildMultiTaskTargetNet(in_channels, backbone_features, avgpool_size, num_classes,
+def BuildMultiTaskTargetNet(backbone_features, num_classes, in_channels, avgpool_size,
         filters=[64, 64, 128, 256, 512], blocks=[2, 2, 2, 2], bottleneck=False,
-        groups=1, width_per_group=None, dropout_conv=0.0):
+        groups=1, width_per_group=None):
     """ 
         in_channels : size of the tensor in the channel dimension\n
-        backbone_features : number of features generated by the backbone and passed to the classifier heads\n
-        num_classes : list of the length of each multi label classifier head\n
+        backbone_features : number of features generated by the backbone
+        and passed to the classifier heads. The classifier head designs expects
+        [-1, backbone_features, 1, 1] input. Each head is made of a single 1x1
+        convultion and a flatten layer.\n
+        num_classes : list of the length of each multi task classifier head\n
     """
     m = BasicResnet(in_channels, backbone_features, avgpool_size, filters, blocks,
-                bottleneck, groups, width_per_group, dropout_conv)
+                bottleneck, groups, width_per_group)
     return MultiTaskTargetNet(m, backbone_features, num_classes)
 
 
 if __name__ == "__main__":
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-    input_size = 64
+    input_size = 32
     in_channels = 3
-    backbone_features = 512
-    avgpool_size = 4  # input_size/16
-    filters = [64, 64, 128, 256, 512]
-    blocks = [3, 4, 6, 3]
+    backbone_features = 64
+    avgpool_size = 4  # input_size/(2 + 2*(num_blocks-1)
+    filters = [16, 16, 32, 64]
+    blocks = [2, 2, 2]
     bottleneck = False
     groups = 1
     width_per_group = None
-    dropout_conv = 0.0
     num_classes = [16, 13, 34, 10, 10]
 
-    model = BuildMultiTaskTargetNet(in_channels, backbone_features, avgpool_size, num_classes, filters, blocks,
-                bottleneck, groups, width_per_group, dropout_conv)
+    model = BuildMultiTaskTargetNet(backbone_features, num_classes, in_channels, avgpool_size,
+                filters, blocks, bottleneck, groups, width_per_group)
     # print(model)
     summary(model.to(device), (in_channels, input_size, input_size))
 
@@ -175,15 +188,28 @@ if __name__ == "__main__":
 
     """
     filters = [64, 64, 128, 256, 512]
-    resnet18 [2, 2, 2, 2] bottleneck=False
-    resnet34 [3, 4, 6, 3] bottleneck=False
+    bottleneck = False
+    resnet18
+    blocks = [2, 2, 2, 2]
+    resnet34
+    blocks = [3, 4, 6, 3]
 
     filters = [64, 256, 512, 1024, 2048]
-    resnet50 [3, 4, 6, 3] bottleneck=True
-    resnet101 [3, 4, 23, 3] bottleneck=True
-    resnet152 [3, 8, 36, 3] bottleneck=True
-    resnext50_32x4d [3, 4, 6, 3] bottleneck=True groups=32, width_per_group=4
-    resnext101_32x8d [3, 4, 23, 3] bottleneck=True groups=32, width_per_group=8
+    bottleneck = True
+    resnet50 
+    blocks = [3, 4, 6, 3]
+    resnet101
+    blocks = [3, 4, 23, 3]
+    resnet152
+    blocks = [3, 8, 36, 3]
+    resnext50_32x4d
+    blocks = [3, 4, 6, 3]
+    groups = 32
+    width_per_group = 4
+    resnext101_32x8d
+    blocks = [3, 4, 23, 3]
+    groups = 32
+    width_per_group = 8
     """
 
     # fake training loop

@@ -3,10 +3,21 @@ best_model = copy.deepcopy(net.state_dict())
 
 numbers to beat
 orientation: unknown
-letter: 79.7%
-letter_color: 94.1%
 shape: 95.5%
+letter: 79.7%
 shape_color: 99.0%
+letter_color: 94.1%
+
+resnet6? conv1 16 filters, 3 blocks 2 layers 16, 32, 64 filters, task head conv flatten
+orientation: 84.5%
+shape: 96.3%
+letter: 83.8%
+shape_color: 97.8%
+letter_color: 88.7%
+
+smallest target: 16px
+human smallest target: 18px no rotation, 22px rotation
+
 
 todo
 -label weights, "Multi-Task Learning Using Uncertainty to Weigh Losses for Scene Geometry and Semantics"

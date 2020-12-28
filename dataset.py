@@ -14,7 +14,7 @@ class CustomTransformation(torch.nn.Module):
         super().__init__()
 
     def forward(self, img):
-        img = img.filter(ImageFilter.GaussianBlur(radius=max(np.random.normal(loc=0.3, scale=0.5), 0.0)))
+        img = img.filter(ImageFilter.GaussianBlur(radius=max(np.random.normal(loc=0.3, scale=0.2), 0.0)))
         img = TF.adjust_gamma(img, gamma=max(np.random.normal(loc=1.0, scale=0.15), 0.5))
         img = TF.adjust_brightness(img, brightness_factor=max(np.random.normal(loc=1.0, scale=0.2), 0.3))
         if np.random.uniform() < 0.1:
@@ -43,13 +43,13 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 if __name__ == "__main__":
 
-    input_size = 64
-    target_size = 60
-    scale = (0.4, 1.0)
+    input_size = 32
+    target_size = 30
+    scale = (0.6, 1.0)
     rotation = True
 
-    batch_size = 128
-    train_size = 16384
+    batch_size = 512
+    train_size = 8192
     shuffle = False
     num_workers = 0
     drop_last = True
@@ -65,27 +65,33 @@ if __name__ == "__main__":
         # T.Normalize(mean=set_mean, std=set_std)
     ])
 
-    train_dataset = TargetDataset(transforms=train_transforms, input_size=2*input_size,
-        target_size=2*target_size, length=train_size, scale=scale, rotation=rotation)
+    exapnsion_factor = 4  # generate higher resolution targets and downscale, improves aliasing effects
+    train_dataset = TargetDataset(transforms=train_transforms, input_size=exapnsion_factor*input_size,
+        target_size=exapnsion_factor*target_size, length=train_size, scale=scale, rotation=rotation)
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size
         ,shuffle=shuffle, num_workers=num_workers, drop_last=drop_last)
 
 
     # Visualize transforms
-    nrows = 8
-    ncols = 16
+    nrows = 4
+    ncols = 4
     rows = []
     for i in range(nrows):
         row = []
         for j in range(ncols):
             img, label = train_dataset[0]
-            row.append(img.numpy().transpose(2, 1, 0)*255)
+            row.append(img.numpy().transpose(1, 2, 0)*255)
+            # print(i, j, label)
         rows.append( np.hstack(row) )
     grid_img = np.vstack(rows)
     print(grid_img.shape)
-    im = Image.fromarray(grid_img.astype('uint8'), 'RGB')
-    im.show()
+    # im = Image.fromarray(grid_img.astype('uint8'), 'RGB')
+    # im.show()
+    import matplotlib.pyplot as plt
+    plt.imshow(grid_img/255.0)
+    plt.show()
 
+    exit()
 
     nimg = 8000
     mean = 0.0
