@@ -64,14 +64,6 @@ class BasicResnet(nn.Module):
             filters=[64, 64, 128, 256, 512], blocks=[2, 2, 2, 2], bottleneck=False,
             groups=1, width_per_group=None):
         super(BasicResnet, self).__init__()
-        self.in_channels = in_channels
-        self.out_features = out_features
-        self.avgpool_size = avgpool_size
-        self.filters = filters
-        self.blocks = blocks
-        self.bottleneck = bottleneck
-        self.groups = groups
-        self.width_per_group = width_per_group
         self.num_blocks = len(blocks)
         
         self.conv1 = nn.Sequential(
@@ -173,7 +165,7 @@ if __name__ == "__main__":
     backbone_features = 64
     avgpool_size = 4  # input_size/(2 + 2*(num_blocks-1)
     filters = [16, 16, 32, 64]
-    blocks = [2, 2, 2]
+    blocks = [2, 3, 2]
     bottleneck = False
     groups = 1
     width_per_group = None

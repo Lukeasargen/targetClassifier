@@ -48,7 +48,7 @@ if __name__ == "__main__":
     scale = (0.6, 1.0)
     rotation = True
 
-    batch_size = 512
+    batch_size = 256
     train_size = 8192
     shuffle = False
     num_workers = 0

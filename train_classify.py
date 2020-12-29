@@ -11,8 +11,9 @@ import torch.optim as optim  # Optimization and schedulers
 from torch.utils.data import DataLoader  # Building custom datasets
 import torchvision.transforms as T  # Image processing
 from torch.autograd import Variable
+from torch.cuda import amp
 
-from model import BuildMultiTaskTargetNet
+from model_classify import BuildMultiTaskTargetNet
 from dataset import TargetDataset, CustomTransformation
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
@@ -26,7 +27,7 @@ class Logger():
     def _make_file(self):
         self.path = self.name + ".csv"
 
-    def update(self, epoch, traget, output):
+    def update(self, epoch, target, output):
         pass
 
 
@@ -77,19 +78,19 @@ if __name__ == "__main__" and '__file__' in globals():
     # Model Config
     input_size = 32
     in_channels = 3
-    backbone_features = 64
+    backbone_features = 128
     avgpool_size = 4  # input_size/(2 + 2*(num_blocks-1)
-    filters = [16, 16, 32, 64]
-    blocks = [2, 2, 2]
+    filters = [32, 64, 64, 128]
+    blocks = [2, 3, 2]
     bottleneck = False
     groups = 1
     width_per_group = None
     dropout_conv = 0.0
     # num_classes is defined by the dataset
     # Training Hyperparameters
-    num_epochs = 60
+    num_epochs = 20
     validate = False
-    batch_size = 128
+    batch_size = 256
     train_size = 16384
     test_size = 1024
     num_workers = 8
@@ -100,7 +101,8 @@ if __name__ == "__main__" and '__file__' in globals():
     nesterov = True
     weight_decay = 5e-4  # 0, 1e-5, 3e-5, 1e-4, 3e-4, 5e-4, 1e-4, 3e-4, 1e-3
     use_fp16 = True
-    lr_milestones = [40, 50]
+    use_amp = True
+    lr_milestones = [130, 140]
     lr_gamma = 0.1
     use_lr_ramp_up = False
     lr_ramp_base = 1e-3
@@ -145,8 +147,24 @@ if __name__ == "__main__" and '__file__' in globals():
     print('device :', device)
     model = BuildMultiTaskTargetNet(backbone_features, num_classes, in_channels, avgpool_size,
                 filters, blocks, bottleneck, groups, width_per_group).to(device)
-    if use_fp16:
+
+    """ https://github.com/pytorch/pytorch/issues/520#issuecomment-277741834
+    training fp16 batchnorm only leads to a 0.5% decrease in accuracy
+    60% faster traing still looks pretty good
+    possibly fine tune after intial training
+    """
+    def safe_fp16(module):
+        if isinstance(module, nn.modules.batchnorm._BatchNorm):
+            module.float()
+        for child in module.children():
+            safe_fp16(child)
+        return module
+
+    if use_fp16 and not use_amp:
+        print("half model")
         model = model.half()
+        model = safe_fp16(model)
+
     weighted_loss_citerion = None #WeightedTaskLoss(num_tasks=len(num_classes)).to(device)
     params = [{'params': model.parameters(), 'lr': base_lr}]
     if weighted_loss_citerion:
@@ -157,6 +175,7 @@ if __name__ == "__main__" and '__file__' in globals():
                         nesterov=nesterov,
                         weight_decay=weight_decay)
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=lr_milestones, gamma=lr_gamma)
+    scalar = amp.GradScaler()
 
     if use_lr_ramp_up:
         print("LR RAMP from {} to {} with {} steps.".format(lr_ramp_base, base_lr, lr_ramp_steps))
@@ -172,7 +191,35 @@ if __name__ == "__main__" and '__file__' in globals():
     sigma = np.zeros((num_epochs, len(num_classes)))
     current_lr = np.zeros((num_epochs, 1))
 
-    def train(epoch, model, optimizer, dataloader, train=False):
+    def calc_loss(output, target):
+        # Computing the loss and training metrics
+        batch_correct = np.zeros(len(num_classes))
+        tasks_loss = Variable(torch.FloatTensor(len(num_classes))).zero_().to(device)
+        log_preds = np.zeros((batch_size, len(num_classes)))  # track predictions for logging
+        for i in range(len(num_classes)):
+            y = target
+            if target.ndim != 1:
+                y = target[:, i]
+            if output[i].shape[1] == 1:  # output is a scalar not class logits
+                tasks_loss[i] = scalar_loss(output[i], y)
+                batch_correct[i] += get_correct_scalar(output[i], y, angle_threshold)
+                log_preds[:, i] = output[i].detach().cpu().squeeze().numpy()                   
+            else:  # class cross entropy loss
+                # TODO : class weights
+                y = y.long()  # Requires dtype = long
+                tasks_loss[i] = multi_class_loss(output[i], y)
+                batch_correct[i] += get_correct_multi_class(output[i], y)
+                preds_percent, class_idx = torch.max(output[i], dim=1)
+                log_preds[:, i] = class_idx.detach().cpu().squeeze().numpy() 
+
+        if weighted_loss_citerion:
+            batch_loss = weighted_loss_citerion(tasks_loss)
+        else:
+            batch_loss = tasks_loss.sum()  # for back propagation
+
+        return batch_loss, tasks_loss, batch_correct, log_preds
+
+    def train(epoch, model, optimizer, dataloader, scalar, train=False):
         epoch_loss = 0
         tasks_loss_epoch = 0
         total_items = 0
@@ -181,61 +228,38 @@ if __name__ == "__main__" and '__file__' in globals():
         if train:
             model.train()
         else:
-            model.eval()
+            model.eval()  # lock batchnorm layers
 
         c = 0
         for batch_idx, (data, target) in enumerate(dataloader):
             c +=1
             data, target = data.to(device), target.to(device)
-            if use_fp16:
-                data = data.half()
-            output = model(data, dropout_conv)
-
-            # Computing the loss and training metrics
-            tasks_loss = Variable(torch.FloatTensor(len(num_classes))).zero_().to(device)
-            log_preds = np.zeros((batch_size, len(num_classes)))  # track predictions for logging
-            for i in range(len(num_classes)):
-                y = target
-                if target.ndim != 1:
-                    y = target[:, i]
-                if output[i].shape[1] == 1:  # output is a scalar not class logits
-                    tasks_loss[i] = scalar_loss(output[i], y)
-                    correct[i] += get_correct_scalar(output[i], y, angle_threshold)
-                    log_preds[:, i] = output[i].detach().cpu().squeeze().numpy()                   
-                else:  # class cross entropy loss
-                    # TODO : class weights
-                    y = y.long()  # Requires dtype = long
-                    tasks_loss[i] = multi_class_loss(output[i], y)
-                    correct[i] += get_correct_multi_class(output[i], y)
-                    preds_percent, class_idx = torch.max(output[i], dim=1)
-                    log_preds[:, i] = class_idx.detach().cpu().squeeze().numpy() 
-                    # print("preds_percent :", preds_percent)
-                    # print("class_idx :", class_idx)
-
-            # print("target :", target)
-            # print("log_preds :", log_preds)
-
-            # print("tasks_loss :", tasks_loss)
-            if weighted_loss_citerion:
-                # print("weighted")
-                batch_loss = weighted_loss_citerion(tasks_loss)
+            optimizer.zero_grad()
+            if use_amp:
+                with amp.autocast():
+                    output = model(data, dropout_conv)
+                    batch_loss, tasks_loss, batch_correct, log_preds = calc_loss(output, target)
             else:
-                # print("sum")
-                batch_loss = tasks_loss.sum()  # for back propagation
+                if use_fp16:
+                    data = data.half()
+                output = model(data, dropout_conv)
+                batch_loss, tasks_loss, batch_correct, log_preds = calc_loss(output, target)
 
-            # print("weighted_loss_citerion :", weighted_loss_citerion(tasks_loss))
-            # print("sum :", tasks_loss.sum())
-            # print("batch_loss :", batch_loss)
-
+            correct += batch_correct
             tasks_loss_epoch += tasks_loss  # for stats
             epoch_loss += batch_loss.item()  # for stats
             total_items += data.size(0)  # for stats
 
-            # Backwards pass, update learning rates
+            # Backwards pass
             if train:
-                optimizer.zero_grad()
-                batch_loss.backward()
-                optimizer.step()
+                if use_amp:
+                    with amp.autocast():
+                        scalar.scale(batch_loss).backward()
+                        scalar.step(optimizer)
+                        scalar.update()
+                else:
+                    batch_loss.backward()
+                    optimizer.step()
 
         # END BATCH LOOP
 
@@ -257,7 +281,7 @@ if __name__ == "__main__" and '__file__' in globals():
             valid_loss[epoch-1] = (tasks_loss_epoch.detach().cpu().numpy()/c)
             valid_accuracy[epoch-1] = (acc)
 
-        # TODO : save model
+        return unit_loss
 
         # END TRAIN FUNCTION
 
@@ -266,13 +290,21 @@ if __name__ == "__main__" and '__file__' in globals():
         if t > 60: return "{:.2f} minutes".format(t/60)
         else: return "{:.2f} seconds".format(t)
 
+    current_run = 0
+    with open('runs/LASTRUN.txt') as f:
+        current_run = int(f.read()) + 1
+    with open('runs/LASTRUN.txt', 'w') as f:
+        f.write("%s\n" % current_run)
+
+    best_loss = None
+
     t0 = time.time()
     for epoch in range(num_epochs):
         epoch += 1
         t1 = time.time()
-        train(epoch, model, optimizer, train_loader, train=True)
+        epoch_loss = train(epoch, model, optimizer, train_loader, scalar, train=True)
         if validate:
-            train(epoch, model, optimizer, test_loader, train=False)
+            epoch_loss = train(epoch, model, optimizer, test_loader, scalar, train=False)
         duration = time.time()-t1
         print("EPOCH {}/{}. Epoch Duration={}. Run Duration={}. Remaining={}".format(epoch, num_epochs, time_to_string(duration), time_to_string(time.time()-t0), time_to_string(duration*(num_epochs-epoch))))
         
@@ -290,9 +322,16 @@ if __name__ == "__main__" and '__file__' in globals():
                 optimizer.param_groups[0]['lr'] = new_lr
                 print("MILESTONE {}: lr reduced to {}".format(epoch, new_lr))
         
+        if best_loss == None:
+            best_loss = epoch_loss
+        elif epoch_loss < best_loss:
+            best_loss = epoch_loss
+            model_save_name = 'runs/run{:04d}_epoch{:04d}.pth'.format(current_run, epoch)
+            torch.save(model.state_dict(), model_save_name)
+
         # END TRAIN LOOP
 
-    # exit()
+    exit()
 
     # Display loss graphs
     line_colors = [
