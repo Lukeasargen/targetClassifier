@@ -39,14 +39,11 @@ human readable: 18px no rotation, 22px rotation
 
 
 todo
--label weights, "Multi-Task Learning Using Uncertainty to Weigh Losses for Scene Geometry and Semantics"
 -class weights, some classes are more difficult, I vs H, I vs L vs 1, Z vs N, 0 vs O
   - can it be handled like an imbalanced dataset (undersample, oversample, )
 - test speed
   - nn.dropout vs F.dropout
 -visualize the metrics, confusion matrix, make jupyter notebook
-  - load model
-  - load generator
   - evaluate x images
   - calc metrics
     -by task and class, accuracy, precision, recall, specificty, f1 score, matthews coreelation coefficient, confusion matrix
