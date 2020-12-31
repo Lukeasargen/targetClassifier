@@ -1,4 +1,5 @@
 import random
+
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
@@ -266,20 +267,8 @@ class TargetGenerator():
         return img, label
 
 
-if __name__ == "__main__":
-
+def visualize_targets(img_size, target_size, scale=(1.0,1.0), rotation=False):
     gen = TargetGenerator()
-
-    img_size = 64
-    target_size = 60
-    scale = (0.4, 1.0)
-    rotation = True
-
-    # x, y = gen.draw_target(img_size, target_size, scale=scale, rotation=rotation)
-    # x.show()
-    # print(y)
-    # exit()
-
     nrows = 8
     ncols = 16
     rows = []
@@ -295,5 +284,21 @@ if __name__ == "__main__":
     im.show()
     # im.save("targets.jpeg")
 
-    exit()
+
+if __name__ == "__main__":
+
+    gen = TargetGenerator()
+
+    img_size = 64
+    target_size = 60
+    scale = (0.4, 1.0)
+    rotation = True
+
+    dataset_size = 10  # number of targets to create
+
+    x, y = gen.draw_target(img_size, target_size, scale=scale, rotation=rotation)
+    x.show()
+    print(y)
+
+    # visualize_targets(img_size, target_size, scale, rotation)
 

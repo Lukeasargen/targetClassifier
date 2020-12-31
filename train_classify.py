@@ -1,9 +1,11 @@
-import os  # Get files
+import copy
 import csv  # CSV logger
-import time  # Time training
 import datetime
-import numpy as np  # Random selection
+import os  # Get files
+import time  # Time training
+
 import matplotlib.pyplot as plt
+import numpy as np  # Random selection
 from PIL import Image
 import torch  # Tensor library
 import torch.nn as nn  # loss functinos
@@ -13,8 +15,9 @@ import torchvision.transforms as T  # Image processing
 from torch.autograd import Variable
 from torch.cuda import amp
 
-from model_classify import BuildMultiTaskTargetNet
-from dataset import TargetDataset, CustomTransformation
+from models.multitask import BuildMultiTaskResnet
+from dataset import LiveTargetDataset, CustomTransformation
+from save_load import save_multitask_resnet
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
@@ -32,18 +35,15 @@ class Logger():
 
 
 class WeightedTaskLoss(nn.Module):
-    """ https://arxiv.org/abs/1703.04977 """
+    """ https://arxiv.org/abs/1703.04977 """    
     def __init__(self, num_tasks):
         super(WeightedTaskLoss, self).__init__()
         self.num_tasks = num_tasks
-        self.sigma = nn.Parameter(torch.zeros(num_tasks))
+        self.sigma = nn.Parameter(torch.ones(num_tasks))
 
     def forward(self, tasks_loss):
-        # sigma is 1
-        # epsilon = 10e-9
-        # precision  = (0.5*tasks_loss/(self.sigma+epsilon)**2).sum()
-        # loss = precision + torch.log(torch.prod(self.sigma+epsilon))
-        loss = (torch.exp(-self.sigma) * tasks_loss + self.sigma).sum()
+        kappa = 0.5 / self.sigma**2
+        loss = (kappa*tasks_loss).sum() + torch.log(torch.prod(self.sigma))
         return loss
 
 
@@ -78,17 +78,18 @@ if __name__ == "__main__" and '__file__' in globals():
     # Model Config
     input_size = 32
     in_channels = 3
-    backbone_features = 128
-    avgpool_size = 4  # input_size/(2 + 2*(num_blocks-1)
-    filters = [32, 64, 64, 128]
+    backbone_features = 256
+    avgpool_size = 4
+    filters = [32, 64, 128, 256]
     blocks = [2, 3, 2]
     bottleneck = False
     groups = 1
     width_per_group = None
-    dropout_conv = 0.0
+    max_pool = False
+    dropout = 0.0
     # num_classes is defined by the dataset
     # Training Hyperparameters
-    num_epochs = 20
+    num_epochs = 200
     validate = False
     batch_size = 256
     train_size = 16384
@@ -96,25 +97,30 @@ if __name__ == "__main__" and '__file__' in globals():
     num_workers = 8
     shuffle = False
     drop_last = True
-    base_lr = 1e-1
+    base_lr = 1e-2
     momentum = 0.9
     nesterov = True
     weight_decay = 5e-4  # 0, 1e-5, 3e-5, 1e-4, 3e-4, 5e-4, 1e-4, 3e-4, 1e-3
     use_fp16 = True
     use_amp = True
-    lr_milestones = [130, 140]
+    lr_milestones = [] # [100, 150]
     lr_gamma = 0.1
     use_lr_ramp_up = False
     lr_ramp_base = 1e-3
     lr_ramp_steps = 9
     angle_threshold = 22.5/180  # scalar angle accuracy
     # Dataset config
+    dataset_folder = None  # root directory that has images and labels.csv
+    val_split = 0.2  # percentage of dataset used for validation
     target_size = 30
     scale = (0.6, 1.0)
     rotation = True
+    expansion_factor = 4  # generate higher resolution targets and downscale, improves aliasing effects
 
-    set_mean = [0.525, 0.420, 0.378]
-    set_std = [0.179, 0.172, 0.195]
+    set_mean = [0.528, 0.424, 0.374]
+    set_std = [0.178, 0.171, 0.192]
+
+    save_path = lambda r : 'runs/run{:04d}_best_loss.pth'.format(r)
 
     train_transforms = T.Compose([
         CustomTransformation(),
@@ -125,19 +131,26 @@ if __name__ == "__main__" and '__file__' in globals():
     ])
     test_transforms = T.Compose([
         T.Resize((input_size)),  # Make shortest edge this size
+        T.CenterCrop(input_size),
         T.ToTensor(),
         T.Normalize(mean=set_mean, std=set_std)
     ])
 
-    exapnsion_factor = 4  # generate higher resolution targets and downscale, improves aliasing effects
-    train_dataset = TargetDataset(transforms=train_transforms, input_size=exapnsion_factor*input_size,
-        target_size=exapnsion_factor*target_size, length=train_size, scale=scale, rotation=rotation)
+    if dataset_folder:
+        # TODO
+        # load data
+        # split
+        # make datasets
+        pass
+    else:
+        train_dataset = LiveTargetDataset(transforms=train_transforms, input_size=expansion_factor*input_size,
+            target_size=expansion_factor*target_size, length=train_size, scale=scale, rotation=rotation)
+        test_dataset = LiveTargetDataset(transforms=test_transforms, input_size=expansion_factor*input_size,
+            target_size=expansion_factor*target_size, length=test_size, scale=scale, rotation=rotation)
+
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size
         ,shuffle=shuffle, num_workers=num_workers, drop_last=drop_last)
-
-    test_dataset = TargetDataset(transforms=test_transforms, input_size=exapnsion_factor*input_size,
-        target_size=exapnsion_factor*target_size, length=test_size, scale=scale, rotation=rotation)
-    test_loader = DataLoader(dataset=test_dataset, batch_size=batch_size)
+    val_loader = DataLoader(dataset=test_dataset, batch_size=batch_size)
 
     num_classes = test_dataset.gen.num_classes
     print("num_classes :", num_classes)
@@ -145,12 +158,12 @@ if __name__ == "__main__" and '__file__' in globals():
     # Check for cuda
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print('device :', device)
-    model = BuildMultiTaskTargetNet(backbone_features, num_classes, in_channels, avgpool_size,
-                filters, blocks, bottleneck, groups, width_per_group).to(device)
+    model = BuildMultiTaskResnet(backbone_features, num_classes, in_channels, avgpool_size,
+                filters, blocks, bottleneck, groups, width_per_group, max_pool).to(device)
 
     """ https://github.com/pytorch/pytorch/issues/520#issuecomment-277741834
     training fp16 batchnorm only leads to a 0.5% decrease in accuracy
-    60% faster traing still looks pretty good
+    1.5x to 4x faster training still looks pretty good
     possibly fine tune after intial training
     """
     def safe_fp16(module):
@@ -165,7 +178,7 @@ if __name__ == "__main__" and '__file__' in globals():
         model = model.half()
         model = safe_fp16(model)
 
-    weighted_loss_citerion = None #WeightedTaskLoss(num_tasks=len(num_classes)).to(device)
+    weighted_loss_citerion = WeightedTaskLoss(num_tasks=len(num_classes)).to(device)
     params = [{'params': model.parameters(), 'lr': base_lr}]
     if weighted_loss_citerion:
         params.append({'params': weighted_loss_citerion.parameters(), 'lr': base_lr})
@@ -175,7 +188,10 @@ if __name__ == "__main__" and '__file__' in globals():
                         nesterov=nesterov,
                         weight_decay=weight_decay)
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=lr_milestones, gamma=lr_gamma)
-    scalar = amp.GradScaler()
+    # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
+
+    if use_amp:
+        scalar = amp.GradScaler()
 
     if use_lr_ramp_up:
         print("LR RAMP from {} to {} with {} steps.".format(lr_ramp_base, base_lr, lr_ramp_steps))
@@ -198,7 +214,7 @@ if __name__ == "__main__" and '__file__' in globals():
         log_preds = np.zeros((batch_size, len(num_classes)))  # track predictions for logging
         for i in range(len(num_classes)):
             y = target
-            if target.ndim != 1:
+            if target.ndim != 1:  # check for multiple task target
                 y = target[:, i]
             if output[i].shape[1] == 1:  # output is a scalar not class logits
                 tasks_loss[i] = scalar_loss(output[i], y)
@@ -237,12 +253,12 @@ if __name__ == "__main__" and '__file__' in globals():
             optimizer.zero_grad()
             if use_amp:
                 with amp.autocast():
-                    output = model(data, dropout_conv)
+                    output = model(data, dropout)
                     batch_loss, tasks_loss, batch_correct, log_preds = calc_loss(output, target)
             else:
                 if use_fp16:
                     data = data.half()
-                output = model(data, dropout_conv)
+                output = model(data, dropout)
                 batch_loss, tasks_loss, batch_correct, log_preds = calc_loss(output, target)
 
             correct += batch_correct
@@ -304,7 +320,7 @@ if __name__ == "__main__" and '__file__' in globals():
         t1 = time.time()
         epoch_loss = train(epoch, model, optimizer, train_loader, scalar, train=True)
         if validate:
-            epoch_loss = train(epoch, model, optimizer, test_loader, scalar, train=False)
+            epoch_loss = train(epoch, model, optimizer, val_loader, scalar, train=False)
         duration = time.time()-t1
         print("EPOCH {}/{}. Epoch Duration={}. Run Duration={}. Remaining={}".format(epoch, num_epochs, time_to_string(duration), time_to_string(time.time()-t0), time_to_string(duration*(num_epochs-epoch))))
         
@@ -326,12 +342,13 @@ if __name__ == "__main__" and '__file__' in globals():
             best_loss = epoch_loss
         elif epoch_loss < best_loss:
             best_loss = epoch_loss
-            model_save_name = 'runs/run{:04d}_epoch{:04d}.pth'.format(current_run, epoch)
-            torch.save(model.state_dict(), model_save_name)
+            best_model = copy.deepcopy(model)
 
         # END TRAIN LOOP
 
-    exit()
+    save_multitask_resnet(best_model, save_path(current_run), input_size, set_mean, set_std)
+
+    # exit()
 
     # Display loss graphs
     line_colors = [
@@ -341,40 +358,37 @@ if __name__ == "__main__" and '__file__' in globals():
         "Orientation", "Shape", "Letter", "Shape Color", "Letter Color"
     ]
 
-    num_fig = 3
-    if weighted_loss_citerion:
-        num_fig +=1
 
-    fig, ax = plt.subplots(num_fig, 1)
+    fig, ax = plt.subplots(2, 2)
 
     color = 'tab:red'
-    ax[0].set_xlabel('epochs', fontsize=16)
-    ax[0].set_ylabel('accuracy %', fontsize=16, color=color)
-    ax[0].tick_params(axis='y', labelcolor=color)
+    ax[0][0].set_xlabel('epochs', fontsize=16)
+    ax[0][0].set_ylabel('accuracy %', fontsize=16, color=color)
+    ax[0][0].tick_params(axis='y', labelcolor=color)
     for i in range(len(num_classes)):
-        ax[0].plot(range(1, num_epochs+1), train_accuracy[:,i], color=line_colors[i], label=labels_str[i])
+        ax[0][0].plot(range(1, num_epochs+1), train_accuracy[:,i], color=line_colors[i], label=labels_str[i])
         if validate:
-            ax[0].plot(range(1, num_epochs+1), valid_accuracy[:,i], color=line_colors[i], linestyle='dashed')
-    ax[0].legend()
+            ax[0][0].plot(range(1, num_epochs+1), valid_accuracy[:,i], color=line_colors[i], linestyle='dashed')
+    ax[0][0].legend()
 
     color = 'tab:blue'
-    ax[1].set_ylabel('loss', fontsize=16, color=color)  # we already handled the x-label with ax1
-    ax[1].tick_params(axis='y', labelcolor=color)
+    ax[0][1].set_ylabel('loss', fontsize=16, color=color)  # we already handled the x-label with ax1
+    ax[0][1].tick_params(axis='y', labelcolor=color)
     for i in range(len(num_classes)):
-        ax[1].plot(range(1, num_epochs+1), train_loss[:,i], color=line_colors[i], label=labels_str[i])
+        ax[0][1].plot(range(1, num_epochs+1), train_loss[:,i], color=line_colors[i], label=labels_str[i])
         if validate:
-            ax[1].plot(range(1, num_epochs+1), valid_loss[:,i], color=line_colors[i], linestyle='dashed')
+            ax[0][1].plot(range(1, num_epochs+1), valid_loss[:,i], color=line_colors[i], linestyle='dashed')
 
-    ax[2].set_ylabel('learning rate', fontsize=16)  # we already handled the x-label with ax1
-    ax[2].tick_params(axis='y')
-    ax[2].plot(range(1, num_epochs+1), current_lr)
+    ax[1][0].set_ylabel('learning rate', fontsize=16)  # we already handled the x-label with ax1
+    ax[1][0].tick_params(axis='y')
+    ax[1][0].plot(range(1, num_epochs+1), current_lr)
 
     if weighted_loss_citerion:
         color = 'tab:green'
-        ax[num_fig-1].set_ylabel('sigma', fontsize=16, color=color)  # we already handled the x-label with ax1
-        ax[num_fig-1].tick_params(axis='y', labelcolor=color)
+        ax[1][1].set_ylabel('sigma', fontsize=16, color=color)  # we already handled the x-label with ax1
+        ax[1][1].tick_params(axis='y', labelcolor=color)
         for i in range(len(num_classes)):
-            ax[num_fig-1].plot(range(1, num_epochs+1), sigma[:,i], color=line_colors[i], label=labels_str[i])
+            ax[1][1].plot(range(1, num_epochs+1), sigma[:,i], color=line_colors[i], label=labels_str[i])
 
 
     fig.tight_layout()  # otherwise the right y-label is slightly clipped

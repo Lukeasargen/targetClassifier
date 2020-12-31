@@ -1,4 +1,7 @@
 import os
+import time
+
+import matplotlib.pyplot as plt
 import numpy as np
 from PIL import Image, ImageFilter
 import torch
@@ -6,7 +9,9 @@ from torch.utils.data import Dataset, DataLoader  # Building custom datasets
 import torchvision.transforms as T  # Image processing
 import torchvision.transforms.functional as TF  # Image processing
 
-from generate_samples import TargetGenerator
+from generate_targets import TargetGenerator
+
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 
 class CustomTransformation(torch.nn.Module):
@@ -21,7 +26,8 @@ class CustomTransformation(torch.nn.Module):
             img = img.filter(ImageFilter.UnsharpMask(radius=max(np.random.normal(loc=1.0, scale=0.25), 0.0)))
         return img
 
-class TargetDataset(Dataset):
+
+class LiveTargetDataset(Dataset):
     def __init__(self, transforms, input_size, target_size, length, scale, rotation):
         self.transforms = transforms
         self.gen = TargetGenerator()
@@ -38,21 +44,87 @@ class TargetDataset(Dataset):
         img, y = self.gen.draw_target(self.input_size, self.target_size, self.scale, self.rotation)
         return self.transforms(img), torch.tensor(list(y.values()), dtype=torch.float).squeeze()
 
-os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
+class FolderTargetDataset(Dataset):
+    def __init__(self, root, transforms):
+        self.transforms = transforms
+        self.root = root
+
+        self.length = 0
+
+    def __len__(self):
+        return self.length
+
+    def __getitem__(self, idx):
+        img, y = self.gen.draw_target(self.input_size, self.target_size, self.scale, self.rotation)
+        # target needs to be a tensor float of the class index for each task
+        return self.transforms(img), torch.tensor(list(y.values()), dtype=torch.float).squeeze()
+
+
+def visualize_dataset(dataset):
+    nrows = 4
+    ncols = 4
+    rows = []
+    for i in range(nrows):
+        row = []
+        for j in range(ncols):
+            img, label = dataset[0]
+            row.append(img.numpy().transpose(1, 2, 0)*255)
+            # print(i, j, label)
+        rows.append( np.hstack(row) )
+    grid_img = np.vstack(rows)
+    print(grid_img.shape)
+    # im = Image.fromarray(grid_img.astype('uint8'), 'RGB')
+    # im.show()
+    plt.imshow(grid_img/255.0)
+    plt.show()
+
+
+def dataset_stats(dataset, num=1000):
+    mean = 0.0
+    var = 0.0
+    n = min(len(dataset), num)
+    for i in range(n):
+        # img in shape [W, H, C]
+        img, y = dataset[i]
+        # [1, C, H, W], expand so that the mean function can run on dim=0
+        img = np.expand_dims((np.array(img)), axis=0)
+        mean += np.mean(img, axis=(0, 2, 3))
+        var += np.var(img, axis=(0, 2, 3))  # you can add var, not std
+    print("mean :", mean/nimg)
+    print("std :", np.sqrt(var/nimg))
+
+
+def time_dataloader(datalodaer, max_num_workers=4):
+    for i in range(max_num_workers+1):
+        train_loader = DataLoader(
+            dataset=train_dataset
+            ,batch_size=batch_size
+            ,shuffle=shuffle
+            ,num_workers=i
+            ,drop_last=drop_last)
+        t0 = time.time()
+        for batch_idx, (data, target) in enumerate(train_loader):
+            pass
+        print("{:.6f} seconds with {} workers.".format(time.time()-t0, i))
 
 
 if __name__ == "__main__":
 
     input_size = 32
-    target_size = 30
-    scale = (0.6, 1.0)
-    rotation = True
-
     batch_size = 256
     train_size = 8192
+    test_size = 1024
     shuffle = False
     num_workers = 0
     drop_last = True
+
+    dataset_folder = None  # root directory that has images and labels.csv, if None targets are made during the training
+    val_split = 0.2  # percentage of dataset used for validation
+    target_size = 30
+    scale = (0.6, 1.0)
+    rotation = True
+    expansion_factor = 4  # generate higher resolution targets and downscale, improves aliasing effects
 
     set_mean = [0.538, 0.428, 0.381]
     set_std = [0.175, 0.168, 0.191]
@@ -64,64 +136,36 @@ if __name__ == "__main__":
         T.ToTensor(),
         # T.Normalize(mean=set_mean, std=set_std)
     ])
+    test_transforms = T.Compose([
+        T.Resize((input_size)),  # Make shortest edge this size
+        T.ToTensor(),
+        # T.Normalize(mean=set_mean, std=set_std)
+    ])
 
-    exapnsion_factor = 4  # generate higher resolution targets and downscale, improves aliasing effects
-    train_dataset = TargetDataset(transforms=train_transforms, input_size=exapnsion_factor*input_size,
-        target_size=exapnsion_factor*target_size, length=train_size, scale=scale, rotation=rotation)
+    if dataset_folder:
+        # TODO
+        # load data
+        # split
+        # make datasets
+        pass
+    else:
+        train_dataset = LiveTargetDataset(transforms=train_transforms, input_size=expansion_factor*input_size,
+            target_size=expansion_factor*target_size, length=train_size, scale=scale, rotation=rotation)
+        test_dataset = LiveTargetDataset(transforms=test_transforms, input_size=expansion_factor*input_size,
+            target_size=expansion_factor*target_size, length=test_size, scale=scale, rotation=rotation)
+
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size
         ,shuffle=shuffle, num_workers=num_workers, drop_last=drop_last)
+    val_loader = DataLoader(dataset=test_dataset, batch_size=batch_size)
 
+    x, y = train_dataset[0]
 
-    # Visualize transforms
-    nrows = 4
-    ncols = 4
-    rows = []
-    for i in range(nrows):
-        row = []
-        for j in range(ncols):
-            img, label = train_dataset[0]
-            row.append(img.numpy().transpose(1, 2, 0)*255)
-            # print(i, j, label)
-        rows.append( np.hstack(row) )
-    grid_img = np.vstack(rows)
-    print(grid_img.shape)
-    # im = Image.fromarray(grid_img.astype('uint8'), 'RGB')
-    # im.show()
-    import matplotlib.pyplot as plt
-    plt.imshow(grid_img/255.0)
-    plt.show()
+    print(x.shape)
+    print(y.shape)
 
-    exit()
+    # dataset_stats(train_dataset, num=8000)
 
-    nimg = 8000
-    mean = 0.0
-    var = 0.0
-    for i in range(nimg):
-        # img in shape [W, H, C]
-        img, y = train_dataset[0]
-        # img = np.random.normal(size=(img_size, img_size, 3)) * 255
-        # [1, C, H, W], expand so that the mean function can run on dim=0
-        img = np.expand_dims((np.array(img)), axis=0)
-        mean += np.mean(img, axis=(0, 2, 3))
-        var += np.var(img, axis=(0, 2, 3))  # you can add var, not std
-    mean = mean/nimg
-    std = np.sqrt(var/nimg)
-    print("mean :", mean)
-    print("std :", std)
+    visualize_dataset(train_dataset)
 
-
-    # Time dataloader
-    # import time
-    # for i in range(9):
-    #     train_loader = DataLoader(
-    #         dataset=train_dataset
-    #         ,batch_size=batch_size
-    #         ,shuffle=shuffle
-    #         ,num_workers=i
-    #         ,drop_last=drop_last)
-    #     t0 = time.time()
-    #     for batch_idx, (data, target) in enumerate(train_loader):
-    #         pass
-    #     print("{:.6f} seconds with {} workers.".format(time.time()-t0, i))
-
+    # time_dataloader(train_loader, max_num_workers=8)
 
