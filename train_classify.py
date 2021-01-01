@@ -40,10 +40,19 @@ class WeightedTaskLoss(nn.Module):
         super(WeightedTaskLoss, self).__init__()
         self.num_tasks = num_tasks
         self.sigma = nn.Parameter(torch.ones(num_tasks))
+        self.mse = nn.MSELoss()
+        self.cel = nn.CrossEntropyLoss()
 
-    def forward(self, tasks_loss):
-        kappa = 0.5 / self.sigma**2
-        loss = (kappa*tasks_loss).sum() + torch.log(torch.prod(self.sigma))
+    def forward(self, output, target):
+        loss = 0
+        for i in range(self.num_tasks):
+            y = target[i]  # get task target, a tensor of scalars
+            if target.ndim != 1:  # check for multiple task target
+                y = target[:, i]  # target is a tensor of indices
+            if output[i].shape[1] == 1:  # output is a scalar not class logits
+                loss += (0.5*self.mse(output[i].squeeze(), y)/self.sigma[i]**2) + torch.log(self.sigma[i])
+            else:  # class cross entropy loss
+                loss += self.cel(output[i] / self.sigma[i]**2, y.long())
         return loss
 
 
@@ -78,10 +87,10 @@ if __name__ == "__main__" and '__file__' in globals():
     # Model Config
     input_size = 32
     in_channels = 3
-    backbone_features = 256
+    backbone_features = 128
     avgpool_size = 4
-    filters = [32, 64, 128, 256]
-    blocks = [2, 3, 2]
+    filters = [32, 64, 64, 128]
+    blocks = [2, 2, 2]
     bottleneck = False
     groups = 1
     width_per_group = None
@@ -89,21 +98,21 @@ if __name__ == "__main__" and '__file__' in globals():
     dropout = 0.0
     # num_classes is defined by the dataset
     # Training Hyperparameters
-    num_epochs = 200
+    num_epochs = 100
     validate = False
     batch_size = 256
     train_size = 16384
-    test_size = 1024
+    val_size = 1024
     num_workers = 8
     shuffle = False
     drop_last = True
-    base_lr = 1e-2
+    base_lr = 1e-1
     momentum = 0.9
     nesterov = True
-    weight_decay = 5e-4  # 0, 1e-5, 3e-5, 1e-4, 3e-4, 5e-4, 1e-4, 3e-4, 1e-3
-    use_fp16 = True
-    use_amp = True
-    lr_milestones = [] # [100, 150]
+    weight_decay = 0.0  # 0, 1e-5, 3e-5, 1e-4, 3e-4, 5e-4, 1e-4, 3e-4, 1e-3
+    use_fp16 = False
+    use_amp = False
+    lr_milestones = [80, 90]
     lr_gamma = 0.1
     use_lr_ramp_up = False
     lr_ramp_base = 1e-3
@@ -117,8 +126,8 @@ if __name__ == "__main__" and '__file__' in globals():
     rotation = True
     expansion_factor = 4  # generate higher resolution targets and downscale, improves aliasing effects
 
-    set_mean = [0.528, 0.424, 0.374]
-    set_std = [0.178, 0.171, 0.192]
+    set_mean = [0.532, 0.422, 0.377]
+    set_std = [0.175, 0.170, 0.193]
 
     save_path = lambda r : 'runs/run{:04d}_best_loss.pth'.format(r)
 
@@ -129,7 +138,7 @@ if __name__ == "__main__" and '__file__' in globals():
         T.ToTensor(),
         T.Normalize(mean=set_mean, std=set_std)
     ])
-    test_transforms = T.Compose([
+    val_transforms = T.Compose([
         T.Resize((input_size)),  # Make shortest edge this size
         T.CenterCrop(input_size),
         T.ToTensor(),
@@ -145,14 +154,14 @@ if __name__ == "__main__" and '__file__' in globals():
     else:
         train_dataset = LiveTargetDataset(transforms=train_transforms, input_size=expansion_factor*input_size,
             target_size=expansion_factor*target_size, length=train_size, scale=scale, rotation=rotation)
-        test_dataset = LiveTargetDataset(transforms=test_transforms, input_size=expansion_factor*input_size,
-            target_size=expansion_factor*target_size, length=test_size, scale=scale, rotation=rotation)
+        val_dataset = LiveTargetDataset(transforms=val_transforms, input_size=expansion_factor*input_size,
+            target_size=expansion_factor*target_size, length=val_size, scale=scale, rotation=rotation)
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size
         ,shuffle=shuffle, num_workers=num_workers, drop_last=drop_last)
-    val_loader = DataLoader(dataset=test_dataset, batch_size=batch_size)
+    val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size)
 
-    num_classes = test_dataset.gen.num_classes
+    num_classes = val_dataset.gen.num_classes
     print("num_classes :", num_classes)
 
     # Check for cuda
@@ -181,7 +190,7 @@ if __name__ == "__main__" and '__file__' in globals():
     weighted_loss_citerion = WeightedTaskLoss(num_tasks=len(num_classes)).to(device)
     params = [{'params': model.parameters(), 'lr': base_lr}]
     if weighted_loss_citerion:
-        params.append({'params': weighted_loss_citerion.parameters(), 'lr': base_lr})
+        params.append({'params': weighted_loss_citerion.parameters(), 'lr': base_lr/10})
     optimizer = optim.SGD(params,
                         lr=base_lr,
                         momentum=momentum,
@@ -190,8 +199,7 @@ if __name__ == "__main__" and '__file__' in globals():
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=lr_milestones, gamma=lr_gamma)
     # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
 
-    if use_amp:
-        scalar = amp.GradScaler()
+    scalar = amp.GradScaler()
 
     if use_lr_ramp_up:
         print("LR RAMP from {} to {} with {} steps.".format(lr_ramp_base, base_lr, lr_ramp_steps))
@@ -229,7 +237,7 @@ if __name__ == "__main__" and '__file__' in globals():
                 log_preds[:, i] = class_idx.detach().cpu().squeeze().numpy() 
 
         if weighted_loss_citerion:
-            batch_loss = weighted_loss_citerion(tasks_loss)
+            batch_loss = weighted_loss_citerion(output, target)
         else:
             batch_loss = tasks_loss.sum()  # for back propagation
 
@@ -340,6 +348,7 @@ if __name__ == "__main__" and '__file__' in globals():
         
         if best_loss == None:
             best_loss = epoch_loss
+            best_model = copy.deepcopy(model)
         elif epoch_loss < best_loss:
             best_loss = epoch_loss
             best_model = copy.deepcopy(model)

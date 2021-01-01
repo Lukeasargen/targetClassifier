@@ -43,7 +43,6 @@ if __name__ == "__main__":
     path = "runs/run0090_best_loss.pth"
     model, input_size, mean, std = load_multitask_resnet(path, device)
 
-    input_size = 32
     in_channels = 3
     batch = 1
     n_trials = 100

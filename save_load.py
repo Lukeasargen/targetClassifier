@@ -40,7 +40,7 @@ if __name__ == "__main__":
     set_mean = [0.528, 0.424, 0.374]
     set_std = [0.178, 0.171, 0.192]
 
-    save_path = lambda r : 'runs/run{:04d}_epoch{:04d}.pth'.format(r)
+    save_path = lambda r : 'runs/run{:04d}_best_loss.pth'.format(r)
 
     print(save_path(1, 3))
 
