@@ -22,4 +22,7 @@ python -m ipykernel install --user --name pytorch --display-name "Pytorch"
 pip install -r requirements.txt
 ```
 
-Start jupyter notebook from the project directory with this command: `jupyter notebook`
+Start jupyter notebook from the project directory with this command
+```
+jupyter notebook
+```

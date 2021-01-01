@@ -98,11 +98,11 @@ if __name__ == "__main__" and '__file__' in globals():
     dropout = 0.0
     # num_classes is defined by the dataset
     # Training Hyperparameters
-    num_epochs = 100
-    validate = False
+    num_epochs = 30
+    validate = True
     batch_size = 256
     train_size = 16384
-    val_size = 1024
+    val_size = 2048
     num_workers = 8
     shuffle = False
     drop_last = True
@@ -112,7 +112,7 @@ if __name__ == "__main__" and '__file__' in globals():
     weight_decay = 0.0  # 0, 1e-5, 3e-5, 1e-4, 3e-4, 5e-4, 1e-4, 3e-4, 1e-3
     use_fp16 = False
     use_amp = False
-    lr_milestones = [80, 90]
+    lr_milestones = [20, 25]
     lr_gamma = 0.1
     use_lr_ramp_up = False
     lr_ramp_base = 1e-3
@@ -122,12 +122,12 @@ if __name__ == "__main__" and '__file__' in globals():
     dataset_folder = None  # root directory that has images and labels.csv
     val_split = 0.2  # percentage of dataset used for validation
     target_size = 30
-    scale = (0.6, 1.0)
+    scale = (1.0, 1.0)
     rotation = True
     expansion_factor = 4  # generate higher resolution targets and downscale, improves aliasing effects
 
-    set_mean = [0.532, 0.422, 0.377]
-    set_std = [0.175, 0.170, 0.193]
+    set_mean = [0.378, 0.306, 0.380]
+    set_std = [0.252, 0.216, 0.252]
 
     save_path = lambda r : 'runs/run{:04d}_best_loss.pth'.format(r)
 
@@ -187,7 +187,7 @@ if __name__ == "__main__" and '__file__' in globals():
         model = model.half()
         model = safe_fp16(model)
 
-    weighted_loss_citerion = WeightedTaskLoss(num_tasks=len(num_classes)).to(device)
+    weighted_loss_citerion = None #WeightedTaskLoss(num_tasks=len(num_classes)).to(device)
     params = [{'params': model.parameters(), 'lr': base_lr}]
     if weighted_loss_citerion:
         params.append({'params': weighted_loss_citerion.parameters(), 'lr': base_lr/10})

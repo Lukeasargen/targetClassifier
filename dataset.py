@@ -68,7 +68,7 @@ def visualize_dataset(dataset):
     for i in range(nrows):
         row = []
         for j in range(ncols):
-            img, label = dataset[0]
+            img, label = dataset[i*ncols+j]
             row.append(img.numpy().transpose(1, 2, 0)*255)
             # print(i, j, label)
         rows.append( np.hstack(row) )
@@ -91,8 +91,8 @@ def dataset_stats(dataset, num=1000):
         img = np.expand_dims((np.array(img)), axis=0)
         mean += np.mean(img, axis=(0, 2, 3))
         var += np.var(img, axis=(0, 2, 3))  # you can add var, not std
-    print("mean :", mean/nimg)
-    print("std :", np.sqrt(var/nimg))
+    print("mean :", mean/num)
+    print("std :", np.sqrt(var/num))
 
 
 def time_dataloader(datalodaer, max_num_workers=4):
@@ -122,24 +122,19 @@ if __name__ == "__main__":
     dataset_folder = None  # root directory that has images and labels.csv, if None targets are made during the training
     val_split = 0.2  # percentage of dataset used for validation
     target_size = 30
-    scale = (0.6, 1.0)
+    scale = (1.0, 1.0)
     rotation = True
     expansion_factor = 4  # generate higher resolution targets and downscale, improves aliasing effects
-
-    set_mean = [0.538, 0.428, 0.381]
-    set_std = [0.175, 0.168, 0.191]
 
     train_transforms = T.Compose([
         CustomTransformation(),
         # T.RandomPerspective(distortion_scale=0.5, p=0.5, interpolation=Image.BICUBIC),
         T.Resize((input_size)),  # Make shortest edge this size
         T.ToTensor(),
-        # T.Normalize(mean=set_mean, std=set_std)
     ])
     test_transforms = T.Compose([
         T.Resize((input_size)),  # Make shortest edge this size
         T.ToTensor(),
-        # T.Normalize(mean=set_mean, std=set_std)
     ])
 
     if dataset_folder:
@@ -163,9 +158,9 @@ if __name__ == "__main__":
     print(x.shape)
     print(y.shape)
 
-    # dataset_stats(train_dataset, num=8000)
-
     visualize_dataset(train_dataset)
+
+    dataset_stats(train_dataset, num=10000)
 
     # time_dataloader(train_loader, max_num_workers=8)
 
