@@ -23,11 +23,11 @@ class ResidualBlock(nn.Module):
                 ('conv1', nn.Conv2d(in_channels=in_channels, out_channels=downscale_filters,
                     kernel_size=(1, 1), stride=1, padding=0, bias=False)),
                 ('bn1', nn.BatchNorm2d(downscale_filters)),
-                ('relu', nn.ReLU()),
+                ('relu', nn.ReLU(inplace=True)),
                 ('conv2', nn.Conv2d(in_channels=downscale_filters, out_channels=downscale_filters,
                     kernel_size=(3, 3), stride=stride, padding=1, groups=groups, bias=False)),
                 ('bn2', nn.BatchNorm2d(downscale_filters)),
-                ('relu', nn.ReLU()),
+                ('relu', nn.ReLU(inplace=True)),
                 ('conv3', nn.Conv2d(in_channels=downscale_filters, out_channels=out_channels,
                     kernel_size=(1, 1), stride=1, padding=0, bias=False)),
                 ('bn3', nn.BatchNorm2d(out_channels)),
@@ -37,7 +37,7 @@ class ResidualBlock(nn.Module):
                 ('conv1', nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
                     kernel_size=(3, 3), stride=stride, padding=1, bias=False)),
                 ('bn1', nn.BatchNorm2d(out_channels)),
-                ('relu', nn.ReLU()),
+                ('relu', nn.ReLU(inplace=True)),
                 ('conv2', nn.Conv2d(in_channels=out_channels, out_channels=out_channels,
                     kernel_size=(3, 3), stride=1, padding=1, bias=False)),
                 ('bn2', nn.BatchNorm2d(out_channels)),
@@ -54,7 +54,7 @@ class ResidualBlock(nn.Module):
                     kernel_size=(1, 1), stride=stride, bias=False),
                 nn.BatchNorm2d(out_channels)
             )
-        self.relu = nn.ReLU()
+        self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x):
         out = self.block(x)
@@ -73,13 +73,13 @@ class BasicResnet(nn.Module):
         
         first_modules = [
             nn.Conv2d(in_channels=in_channels, out_channels=filters[0],
-            kernel_size=(7, 7), stride=2, padding=3, bias=False),
+            kernel_size=(5, 5), stride=2, padding=2, bias=False),
             nn.BatchNorm2d(filters[0]),
-            nn.ReLU()
+            nn.ReLU(inplace=True)
         ]
         if max_pool:
             first_modules.append(nn.MaxPool2d(kernel_size=3, stride=2, padding=1))
-        self.conv1 = nn.Sequential(*first_modules)
+        self.first_layer = nn.Sequential(*first_modules)
 
         for idx, num in enumerate(blocks):
             stride = 2
@@ -87,7 +87,7 @@ class BasicResnet(nn.Module):
             setattr(self, "Block"+str(idx), self._create_block(filters[idx], filters[idx+1], stride, blocks[idx], bottleneck, groups, width_per_group))
 
         # Remove last conv because each classifier head gets the averaged feature maps as input
-        # Set last_conv=True to get class logits out
+        # Set last_conv=True to get a basic linear classifier
         last_modules = [nn.AvgPool2d(avgpool_size)]
         if last_conv:
             last_modules.append(nn.Conv2d(in_channels=filters[-1], out_channels=out_features,
@@ -113,7 +113,7 @@ class BasicResnet(nn.Module):
         return nn.Sequential(*layers)
 
     def forward(self, x, dropout=0.0):
-        out = self.conv1(x)
+        out = self.first_layer(x)
         for idx in range(self.num_blocks):
             out = eval("self.Block" + str(idx))(out)
             out = F.dropout(out, p=dropout)

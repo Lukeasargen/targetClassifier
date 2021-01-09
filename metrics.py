@@ -23,11 +23,13 @@ def forward(model, input):
 
 def evaluate(model, datalodaer):
     # Pass all the validate data and store the predictions
-    tasks_preds = np.zeros((val_size, 5))
-    all_targets = np.zeros((val_size, 5))
-    for idx, (data, target) in enumerate(datalodaer):
-        all_targets[idx] = target.numpy()
-        tasks_preds[idx][i] = forward(model, data)
+    model.eval()  # Set layers to eval
+    torch.no_grad():  # Don't track gradients
+        tasks_preds = np.zeros((val_size, 5))
+        all_targets = np.zeros((val_size, 5))
+        for idx, (data, target) in enumerate(datalodaer):
+            all_targets[idx] = target.numpy()
+            tasks_preds[idx][i] = forward(model, data)
     return tasks_preds, all_targets
 
 

@@ -35,7 +35,7 @@ class Logger():
 
 
 class WeightedTaskLoss(nn.Module):
-    """ https://arxiv.org/abs/1703.04977 """    
+    """ https://arxiv.org/abs/1705.07115 """    
     def __init__(self, num_tasks):
         super(WeightedTaskLoss, self).__init__()
         self.num_tasks = num_tasks
@@ -98,7 +98,7 @@ if __name__ == "__main__" and '__file__' in globals():
     dropout = 0.0
     # num_classes is defined by the dataset
     # Training Hyperparameters
-    num_epochs = 30
+    num_epochs = 100
     validate = True
     batch_size = 256
     train_size = 16384
@@ -112,28 +112,29 @@ if __name__ == "__main__" and '__file__' in globals():
     weight_decay = 0.0  # 0, 1e-5, 3e-5, 1e-4, 3e-4, 5e-4, 1e-4, 3e-4, 1e-3
     use_fp16 = False
     use_amp = False
-    lr_milestones = [20, 25]
+    lr_milestones = [85]
     lr_gamma = 0.1
     use_lr_ramp_up = False
     lr_ramp_base = 1e-3
     lr_ramp_steps = 9
+    use_weighted_loss = True
     angle_threshold = 22.5/180  # scalar angle accuracy
     # Dataset config
     dataset_folder = None  # root directory that has images and labels.csv
-    val_split = 0.2  # percentage of dataset used for validation
+    val_split = 0.2  # percentage of dataset folder used for validation
     target_size = 30
-    scale = (1.0, 1.0)
+    scale = (0.6, 1.0)
     rotation = True
     expansion_factor = 4  # generate higher resolution targets and downscale, improves aliasing effects
 
-    set_mean = [0.378, 0.306, 0.380]
-    set_std = [0.252, 0.216, 0.252]
+    set_mean = [0.345, 0.275, 0.240]
+    set_std = [0.223, 0.199, 0.203]
 
     save_path = lambda r : 'runs/run{:04d}_best_loss.pth'.format(r)
 
     train_transforms = T.Compose([
         CustomTransformation(),
-        # T.RandomPerspective(distortion_scale=0.5, p=0.5, interpolation=Image.BICUBIC),
+        T.RandomPerspective(distortion_scale=0.5, p=0.5, interpolation=Image.BICUBIC),
         T.Resize((input_size)),  # Make shortest edge this size
         T.ToTensor(),
         T.Normalize(mean=set_mean, std=set_std)
@@ -187,10 +188,12 @@ if __name__ == "__main__" and '__file__' in globals():
         model = model.half()
         model = safe_fp16(model)
 
-    weighted_loss_citerion = None #WeightedTaskLoss(num_tasks=len(num_classes)).to(device)
+    weighted_loss_citerion = None
+    if use_weighted_loss:
+        weighted_loss_citerion = WeightedTaskLoss(num_tasks=len(num_classes)).to(device)
     params = [{'params': model.parameters(), 'lr': base_lr}]
     if weighted_loss_citerion:
-        params.append({'params': weighted_loss_citerion.parameters(), 'lr': base_lr/10})
+        params.append({'params': weighted_loss_citerion.parameters(), 'lr': base_lr/100})
     optimizer = optim.SGD(params,
                         lr=base_lr,
                         momentum=momentum,
@@ -266,7 +269,11 @@ if __name__ == "__main__" and '__file__' in globals():
             else:
                 if use_fp16:
                     data = data.half()
-                output = model(data, dropout)
+                if train:
+                    output = model(data, dropout)
+                else:
+                    with torch.no_grad():
+                        output = model(data, dropout)
                 batch_loss, tasks_loss, batch_correct, log_preds = calc_loss(output, target)
 
             correct += batch_correct

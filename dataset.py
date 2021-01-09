@@ -122,13 +122,13 @@ if __name__ == "__main__":
     dataset_folder = None  # root directory that has images and labels.csv, if None targets are made during the training
     val_split = 0.2  # percentage of dataset used for validation
     target_size = 30
-    scale = (1.0, 1.0)
+    scale = (0.6, 1.0)
     rotation = True
     expansion_factor = 4  # generate higher resolution targets and downscale, improves aliasing effects
 
     train_transforms = T.Compose([
         CustomTransformation(),
-        # T.RandomPerspective(distortion_scale=0.5, p=0.5, interpolation=Image.BICUBIC),
+        T.RandomPerspective(distortion_scale=0.5, p=0.5, interpolation=Image.BICUBIC),
         T.Resize((input_size)),  # Make shortest edge this size
         T.ToTensor(),
     ])
@@ -160,7 +160,7 @@ if __name__ == "__main__":
 
     visualize_dataset(train_dataset)
 
-    dataset_stats(train_dataset, num=10000)
+    # dataset_stats(train_dataset, num=10000)
 
     # time_dataloader(train_loader, max_num_workers=8)
 

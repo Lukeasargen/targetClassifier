@@ -71,8 +71,8 @@ if __name__ == "__main__":
     input_size = 32
     in_channels = 3
     backbone_features = 128
-    avgpool_size = 4
-    filters = [64, 64, 128, 128]
+    avgpool_size = 8
+    filters = [32, 64, 64, 128]
     blocks = [2, 2, 2]
     bottleneck = False
     groups = 1

@@ -15,7 +15,7 @@ def save_multitask_resnet(model, save_path, input_size, mean, std):
     torch.save(data, save_path)
 
 def load_multitask_resnet(path, device='cpu'):
-    data = torch.load(path, map_location=device)
+    data = torch.load(path, map_location=torch.device(device))
     model = BuildMultiTaskResnet(**data['model_args'])
     model.load_state_dict(data['model'])
     return model, data['input_size'], data['mean'], data['std']

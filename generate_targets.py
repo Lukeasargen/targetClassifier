@@ -32,10 +32,10 @@ class TargetGenerator():
         # No W or 9
         self.letter_options = [
             'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H',
-            # 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
-            # 'Q', 'R', 'S', 'T', 'U', 'V', 'X', 'Y',
-            # 'Z', '1', '2', '3', '4', '5', '6', '7',
-            # '8', '0'
+            'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P',
+            'Q', 'R', 'S', 'T', 'U', 'V', 'X', 'Y',
+            'Z', '1', '2', '3', '4', '5', '6', '7',
+            '8', '0'
         ]
         self.font_options = [
             "fonts/InputSans-Regular.ttf",
@@ -59,12 +59,12 @@ class TargetGenerator():
         self.angle_quantization = 16
 
         # Reduce for debugging
-        self.shape_options = [
-            "star", "circle", "square", "trapezoid", "pentagon"
-        ]
-        self.color_options = [
-            'white', 'black', 'red', 'blue'
-        ]
+        # self.shape_options = [
+        #     "star", "circle", "square", "trapezoid", "pentagon"
+        # ]
+        # self.color_options = [
+        #     'white', 'black', 'red', 'blue'
+        # ]
 
         self.num_classes = [
             self.angle_quantization,
