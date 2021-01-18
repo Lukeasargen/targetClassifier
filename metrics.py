@@ -9,7 +9,7 @@ import torchvision.transforms as T
 from torch.utils.data import DataLoader
 from torchsummary import summary
 
-from save_load import load_multitask_resnet
+from models.multitask import load_multitask_resnet
 from dataset import LiveTargetDataset
 
 

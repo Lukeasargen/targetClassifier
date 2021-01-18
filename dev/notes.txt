@@ -54,6 +54,7 @@ f7x7s1p3a8_weighted 824,947 3.15MB [93.359375   99.85351562 97.94921875 99.75585
 f7x7s2p3a4          824,947 3.15MB [90.0390625  99.51171875 92.87109375 99.51171875 96.24023438] 0.5835
 f7x7s2p3a4_weighted 824,947 3.15MB [90.4296875  99.36523438 91.55273438 99.8046875  96.24023438] 0.6007
 
+use f5 s1 1p
 
 previous smallest: 16-18px depending on shape
 smallest target: 17px
@@ -61,6 +62,15 @@ human readable: 18px no rotation, 22px rotation
 
 
 todo
+- save a dataset as files
+- new target sample function, make one for segementation too
+- use background images in target generator
+- write dataloader for image folder
+
+-make evaluation dataset
+-load the evaluate set and run statistics
+
+
 -class weights, some classes are more difficult, I vs H, I vs L vs 1, Z vs N, 0 vs O
   - can it be handled like an imbalanced dataset (undersample, oversample, )
 - test speed
@@ -72,7 +82,6 @@ todo
   - write function that visualizes images, targets, and outputs
     - highlight errors
     - or only show outputs that have erros (100% accuracte labels not shown)
-
 
 for visualizing final model outputs
 
@@ -99,3 +108,17 @@ def visualize(image , actual , pred):
   plt.show()
 
 visualize(image[1] , label[1].tolist() , output[1].tolist())
+
+c
+
+
+
+# bad, GPU to CPU is slow
+.cpu()
+.item()
+.numpy()
+
+# better
+.detach()  #doesn't transfer gpu memory, reemove any a attatched to the variable
+
+

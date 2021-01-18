@@ -1,7 +1,16 @@
+import os
 import random
 
 import numpy as np
+import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
+import torchvision.transforms as T  # Image processing
+
+from custom_transforms import RandomGaussianBlur
+from helper import pil_loader
+
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
 
 def rotate_2d(vector, angle, degrees = False):
     """
@@ -19,7 +28,20 @@ def rotate_2d(vector, angle, degrees = False):
 
 
 class TargetGenerator():
-    def __init__(self):
+    def __init__(self, img_size, target_size, scale=(1.0, 1.0), rotation=False,
+            target_transforms=None, bkg_path=None):
+
+        self.img_size = img_size
+        self.target_size = target_size
+        self.scale = scale
+        self.rotation = rotation
+        self.target_transforms = target_transforms
+        self.bkg_path = bkg_path
+        if bkg_path:
+            self.bkg_count = 0
+            self.backgrounds = [pil_loader(os.path.join(os.getcwd(), bkg_path, x)) for x in os.listdir(bkg_path)]
+            self.bkg_choices = list(range(len(self.backgrounds)))
+
         self.shape_options = [
             "circle", "semicircle", "quartercircle", "triangle",
             "square", "rectangle", "trapezoid", "pentagon",
@@ -222,18 +244,28 @@ class TargetGenerator():
         img = img.rotate(angle, expand=1)
         return img
 
-    def draw_target(self, img_size, target_size, scale=(1.0, 1.0), rotation=False):
+    def draw_target(self, img_size=None, target_size=None, scale=None, rotation=None,
+            target_transforms=None, bkg_path=None):
+
+        if not img_size:
+            img_size = self.img_size
+        if not target_size:
+            target_size = self.target_size
+        if not scale:
+            scale = self.scale
+        if not rotation:
+            rotation = self.rotation
+        if not target_transforms:
+            target_transforms = self.target_transforms
+
         # Create the label with uniform random sampling
-        bkg_idx, shape_color_idx, letter_color_idx = np.random.choice(range(len(self.color_options)), 3, replace=False)
+        bkg_color_idx, shape_color_idx, letter_color_idx = np.random.choice(range(len(self.color_options)), 3, replace=False)
         shape_idx = np.random.randint(0, len(self.shape_options))
         letter_idx = np.random.randint(0, len(self.letter_options))
 
-        bkg_color = self.color_to_hsv(self.color_options[bkg_idx])
-
         # Create a tranparent image to overlay on background images
-        # img = Image.new('RGBA', size=(img_size, img_size), color=(0, 0, 0, 0))
-        img = Image.new('RGBA', size=(img_size, img_size), color=bkg_color)
-        draw = ImageDraw.Draw(img)
+        target = Image.new('RGBA', size=(img_size, img_size), color=(0, 0, 0, 0))
+        draw = ImageDraw.Draw(target)
 
         # Render the target from the label choices
         shape_color = self.color_to_hsv(self.color_options[shape_color_idx])
@@ -244,14 +276,17 @@ class TargetGenerator():
         letter_color = self.color_to_hsv(self.color_options[letter_color_idx])
         letter_mark = self.draw_letter(draw, l, letter_idx, letter_color, orientation)
         ox, oy = letter_mark.size
-        img.paste(letter_mark, (cx-ox//2, cy-1-oy//2), letter_mark)
+        target.paste(letter_mark, (cx-ox//2, cy-1-oy//2), letter_mark)
 
-        img = img.convert('RGB')
-        # img = np.array(img, dtype='uint8')
+        if target_transforms:
+            target = target_transforms(target)
 
-        # Mapp angle from (-180,180) to (-1,1)
-        # if -orientation < -180: orientation -=360
-        # orientation = -orientation/180
+        if not bkg_path:
+            bkg_color = self.color_to_hsv(self.color_options[bkg_color_idx])
+            img = Image.new('RGB', size=(img_size, img_size), color=bkg_color)
+            img.paste(target, None, target)  # Alpha channel is the mask
+        else:
+            img = target  # return the target with transparency
 
         # Quantize angle in cw direction
         # mod by quantization to avoid error at 0 degrees (rotation=False)        
@@ -266,16 +301,44 @@ class TargetGenerator():
         }
         return img, label
 
+    def get_background(self):
+        self.bkg_count += 1
+        if self.bkg_count == len(self.backgrounds):
+            np.random.shuffle(self.bkg_choices)
+            self.bkg_count = 0
+        return self.backgrounds[self.bkg_choices[self.bkg_count]]            
 
-def visualize_targets(img_size, target_size, scale=(1.0,1.0), rotation=False):
-    gen = TargetGenerator()
+    def gen_classify(self, img_size=None, target_size=None, scale=None, rotation=None,
+            target_transforms=None, bkg_path=None):
+        """ Generate a cropped target with it's classification label """
+        if not img_size:
+            img_size = self.img_size
+        if not bkg_path:
+            bkg_path = self.bkg_path
+        target, label = self.draw_target(img_size=None, target_size=None, scale=None,
+                            rotation=None, target_transforms=None, bkg_path=bkg_path)
+        if bkg_path:
+            bkg = self.get_background()
+            img = T.RandomResizedCrop(img_size, scale=(0.08, 1.0), ratio=(3./4., 4./3.), interpolation=Image.NEAREST)(bkg)
+            img.paste(target, None, target)  # Alpha channel is the mask
+        else:
+            img = target.convert("RGB")  # return the target
+        return img, label
+
+    def gen_segment(self):
+        """ Generate an aerial image with it's target mask """
+        # TODO : fill the image with targets and 
+        return img, mask
+
+
+def visualize_classify(gen):
     nrows = 8
-    ncols = 16
+    ncols = 8
     rows = []
     for i in range(nrows):
         row = []
         for j in range(ncols):
-            img, label = gen.draw_target(img_size, target_size, scale=scale, rotation=rotation)
+            img, label = gen.gen_classify()
             row.append(img)
         rows.append( np.hstack(row) )
     grid_img = np.vstack(rows)
@@ -285,20 +348,40 @@ def visualize_targets(img_size, target_size, scale=(1.0,1.0), rotation=False):
     # im.save("targets.jpeg")
 
 
+def save_dataset(gen, name, resolution, num=1024):
+    # create folder
+    # create dataset folder
+    # create metadata frame
+    # for i in range(num):
+        # create name and path
+        # gen target and label
+        # save
+        # track statistics, save to txt
+
+    pass
+
+
 if __name__ == "__main__":
 
-    gen = TargetGenerator()
-
-    img_size = 64
-    target_size = 60
-    scale = (0.4, 1.0)
+    bkg_path = 'backgrounds'  # path to background images
+    img_size = 32
+    target_size = 30
+    scale = (0.6, 1.0)
     rotation = True
+    expansion_factor = 4  # generate higher resolution targets and downscale, improves aliasing effects
 
     dataset_size = 10  # number of targets to create
+    target_tranforms = T.Compose([
+        T.RandomPerspective(distortion_scale=0.4, p=1.0, interpolation=Image.BICUBIC),
+    ])
 
-    x, y = gen.draw_target(img_size, target_size, scale=scale, rotation=rotation)
-    x.show()
-    print(y)
+    gen = TargetGenerator(img_size=expansion_factor*img_size, target_size=expansion_factor*target_size,
+        scale=scale, rotation=rotation, target_transforms=target_tranforms, bkg_path=bkg_path)
+    
+    # x, y = gen.gen_classify()
+    # x.show()
+    # print(y)
 
-    # visualize_targets(img_size, target_size, scale, rotation)
+    visualize_classify(gen)
 
+    # save_dataset(gen, name, resolution=img_size, num=dataset_size)

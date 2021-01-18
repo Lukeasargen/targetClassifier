@@ -64,7 +64,7 @@ class ResidualBlock(nn.Module):
 
 
 class BasicResnet(nn.Module):
-    def __init__(self, in_channels, out_features, avgpool_size,
+    def __init__(self, in_channels, out_features, avgpool_size=None,
             filters=[64, 64, 128, 256, 512], blocks=[2, 2, 2, 2], bottleneck=False,
             groups=1, width_per_group=None, max_pool=False, last_conv=False):
         super(BasicResnet, self).__init__()
@@ -73,7 +73,7 @@ class BasicResnet(nn.Module):
         
         first_modules = [
             nn.Conv2d(in_channels=in_channels, out_channels=filters[0],
-            kernel_size=(5, 5), stride=2, padding=2, bias=False),
+            kernel_size=(5, 5), stride=1, padding=2, bias=False),
             nn.BatchNorm2d(filters[0]),
             nn.ReLU(inplace=True)
         ]
@@ -88,7 +88,11 @@ class BasicResnet(nn.Module):
 
         # Remove last conv because each classifier head gets the averaged feature maps as input
         # Set last_conv=True to get a basic linear classifier
-        last_modules = [nn.AvgPool2d(avgpool_size)]
+        last_modules = []
+        if avgpool_size == None: # 
+            last_modules.append(nn.AdaptiveAvgPool2d((1, 1)))
+        else:
+            last_modules.append(nn.AvgPool2d(avgpool_size))
         if last_conv:
             last_modules.append(nn.Conv2d(in_channels=filters[-1], out_channels=out_features,
                                 kernel_size=(1, 1), stride=1, padding=0, bias=True))
@@ -178,12 +182,12 @@ if __name__ == "__main__":
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-    input_size = 128
+    input_size = 32
     in_channels = 3
     out_features = 100
-    avgpool_size = 2  # input_size/(2 + 2*(num_blocks-1)
-    filters = [32, 64, 128, 256, 512, 1024]
-    blocks = [2, 4, 2, 6, 1]
+    avgpool_size = None  # input_size/( + 2*(num_blocks - 1 + first_conv stride)
+    filters = [64, 256, 512, 1024]
+    blocks = [2, 4, 2]
     bottleneck = False
     groups = 1
     width_per_group = None

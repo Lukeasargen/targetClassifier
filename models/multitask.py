@@ -12,14 +12,35 @@ else:
     from .resnet import BasicResnet
 
 
+def save_multitask_resnet(model, save_path, input_size, mean, std):
+    data = {
+        'model': model.state_dict(),
+        'model_args': model.model_args,
+        'input_size': input_size,
+        'mean': mean,
+        'std': std
+    }
+    torch.save(data, save_path)
+
+def load_multitask_resnet(path, device='cpu'):
+    data = torch.load(path, map_location=torch.device(device))
+    model = BuildMultiTaskResnet(**data['model_args']).to(device)
+    model.load_state_dict(data['model'])
+    return model, data['input_size'], data['mean'], data['std']
+
+
 class MultiTaskNet(nn.Module):
     def __init__(self, basemodel, backbone_features, num_classes, model_args):
+        """ basemodel : output 1x1 conv
+            backbone_features : number of 1x1 features output by basemodel
+            num_classes : list of the class counts by task. Example: [10, 5, 8]
+            model_args : copy of basemodel args for loading the model
+        """
         super(MultiTaskNet, self).__init__()
         self.basemodel = basemodel
         self.backbone_features = backbone_features
         self.num_classes = num_classes
         self.model_args = model_args
-        # make the multi label heads
         for index, num in enumerate(num_classes):
             setattr(self, "ClassifierHead_"+str(index), self._make_classifier(backbone_features, num))
     
@@ -27,15 +48,12 @@ class MultiTaskNet(nn.Module):
         head = nn.Sequential(OrderedDict([
             ('conv1', nn.Conv2d(in_channels=in_features, out_channels=num_classes,
                 kernel_size=(1, 1), stride=1, padding=0, bias=True)),
-            # ('conv2', nn.Conv2d(in_channels=2*num_classes, out_channels=num_classes,
-            #     kernel_size=(1, 1), stride=1, padding=0, bias=True)),
             ('flatten', nn.Flatten())
         ]))
         return head
 
     def forward(self, x, dropout=0.0):
         x = self.basemodel.forward(x, dropout)
-        # forward the label heads
         outs = list()
         for index in range(len(self.num_classes)):
             out = eval("self.ClassifierHead_" + str(index))(x)
@@ -43,7 +61,7 @@ class MultiTaskNet(nn.Module):
         return outs
 
 
-def BuildMultiTaskResnet(backbone_features, num_classes, in_channels, avgpool_size,
+def BuildMultiTaskResnet(backbone_features, num_classes, in_channels, avgpool_size=None,
         filters=[64, 64, 128, 256, 512], blocks=[2, 2, 2, 2], bottleneck=False,
         groups=1, width_per_group=None, max_pool=False):
     """ 
@@ -65,6 +83,59 @@ def BuildMultiTaskResnet(backbone_features, num_classes, in_channels, avgpool_si
     return MultiTaskNet(m, backbone_features, num_classes, model_args)
 
 
+def test_save_load(model, input_size, in_channels):
+    set_mean = [0.528, 0.424, 0.374]
+    set_std = [0.178, 0.171, 0.192]
+    save_path = lambda r : 'runs/run{:04d}_best_loss.pth'.format(r)
+    print(save_path(1))
+    # create fake input
+    x = torch.rand((1, in_channels, input_size, input_size)).cuda()
+    print(x.shape)
+    # pass input and print output
+    out1 = model(x)
+    print(input_size)
+    print(set_mean)
+    print(set_std)
+    print("out1[0] :", out1[0])
+    for i in range(len(out1)):
+        print("out1 Task {} shape : {}".format(i, out1[i].shape))
+    path = save_path(0)
+    save_multitask_resnet(model, path, input_size, set_mean, set_std)
+    # load model
+    m2, in2, mean, std = load_multitask_resnet(path, device)
+    print(in2)
+    print(mean)
+    print(std)
+    out2 = m2(x)
+    print("out2[0] :", out2[0])
+    for i in range(len(out2)):
+        print("out2 Task {} shape : {}".format(i, out2[i].shape))
+
+
+def test_train_loop(model, num_classes, input_size, in_channels, device):
+    batch = 16
+    epochs = 20
+    x = torch.rand((batch, in_channels, input_size, input_size)).to(device)
+    target = torch.hstack([torch.randint(0, n, size=(batch,1)).to(device) for n in num_classes])
+    # print("target :", target, target.shape)
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.SGD(model.parameters(), lr=1e-2, momentum=0.9)
+
+    for epoch in range(epochs):
+        optimizer.zero_grad()
+        output = model(x)
+        tasks_loss = Variable(torch.FloatTensor(len(num_classes))).zero_().to(device)
+        for i in range(len(num_classes)):
+            y = target
+            if target.ndim != 1:  # check for multiple task target
+                y = target[:, i]
+            tasks_loss[i] = criterion(output[i], y)
+        batch_loss = tasks_loss.sum()
+        batch_loss.backward()
+        optimizer.step()
+        # print("tasks_loss :", tasks_loss.tolist())
+        print("Epoch {} Loss={}".format(epoch+1, batch_loss.item()/batch))
+
 if __name__ == "__main__":
     
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
@@ -85,29 +156,6 @@ if __name__ == "__main__":
     # print(model)
     summary(model.to(device), (in_channels, input_size, input_size))
 
-    exit()
+    # test_train_loop(model, num_classes, input_size, in_channels, device)
 
-    # fake training loop
-    batch = 8
-    epochs = 10
-
-    x = torch.rand((batch, in_channels, input_size, input_size)).to(device)
-    target = torch.hstack([torch.randint(0, n, size=(batch,1)).to(device) for n in num_classes])
-    print("target :", target, target.shape)
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(model.parameters(), lr=1e-3, momentum=0.9)
-   
-    for epoch in range(epochs):
-        optimizer.zero_grad()
-        output = model(x)
-        tasks_loss = Variable(torch.FloatTensor(len(num_classes))).zero_().to(device)
-        for i in range(len(num_classes)):
-            y = target
-            if target.ndim != 1:  # check for multiple task target
-                y = target[:, i]
-            tasks_loss[i] = criterion(output[i], y)
-        batch_loss = tasks_loss.sum()
-        batch_loss.backward()
-        optimizer.step()
-        print("tasks_loss :", tasks_loss.tolist())
-        print("Epoch {} Loss={}".format(epoch, batch_loss.item()/batch))
+    # test_save_load(model, input_size, in_channels)

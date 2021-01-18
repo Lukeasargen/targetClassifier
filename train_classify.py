@@ -15,22 +15,26 @@ import torchvision.transforms as T  # Image processing
 from torch.autograd import Variable
 from torch.cuda import amp
 
-from models.multitask import BuildMultiTaskResnet
-from dataset import LiveTargetDataset, CustomTransformation
-from save_load import save_multitask_resnet
+from models.multitask import BuildMultiTaskResnet, save_multitask_resnet
+from dataset import LiveClassifyDataset
+from custom_transforms import CustomTransformation
+
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 
 class Logger():
-    def __init__(self, name):
-        self.name = name + datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.path = None
+    def __init__(self, name, headers):
+        self.name = name
+        self.headers = headers
+        self.path = name + datetime.datetime.now().strftime("_%Y%m%d_%H%M%S") + ".csv"
 
     def _make_file(self):
-        self.path = self.name + ".csv"
+        # create csv with headers
+        pass
 
-    def update(self, epoch, target, output):
+    def update(self, row_dict):
+        # supply data as a dictionary for the row with the headers as keywords
         pass
 
 
@@ -63,10 +67,10 @@ def get_correct_multi_class(output, target):
 
 def get_correct_scalar(output, target, *args):
     output = output.squeeze()
-    return angle_correct(output, target, *args)
+    return scalar_correct(output, target, *args)
 
-def angle_correct(output, target, angle_threshold):
-    return (torch.abs(output-target) < angle_threshold).sum().item()
+def scalar_correct(output, target, scalar_threshold):
+    return (torch.abs(output-target) < scalar_threshold).sum().item()
 
 def multi_class_loss(output, target):
     loss_func = nn.CrossEntropyLoss()
@@ -98,7 +102,7 @@ if __name__ == "__main__" and '__file__' in globals():
     dropout = 0.0
     # num_classes is defined by the dataset
     # Training Hyperparameters
-    num_epochs = 100
+    num_epochs = 50
     validate = True
     batch_size = 256
     train_size = 16384
@@ -112,29 +116,32 @@ if __name__ == "__main__" and '__file__' in globals():
     weight_decay = 0.0  # 0, 1e-5, 3e-5, 1e-4, 3e-4, 5e-4, 1e-4, 3e-4, 1e-3
     use_fp16 = False
     use_amp = False
-    lr_milestones = [85]
+    lr_milestones = [40]
     lr_gamma = 0.1
     use_lr_ramp_up = False
     lr_ramp_base = 1e-3
     lr_ramp_steps = 9
     use_weighted_loss = True
-    angle_threshold = 22.5/180  # scalar angle accuracy
+    scalar_threshold = 45/360  # scalar magnitude of difference to be correct
     # Dataset config
-    dataset_folder = None  # root directory that has images and labels.csv
-    val_split = 0.2  # percentage of dataset folder used for validation
+    dataset_folder = None  # root directory that has images and labels.csv, if None targets are made during the training
+    val_split = 0.2  # percentage of dataset used for validation
+    bkg_path = 'backgrounds'  # path to background images, None is a random color background
     target_size = 30
     scale = (0.6, 1.0)
     rotation = True
     expansion_factor = 4  # generate higher resolution targets and downscale, improves aliasing effects
+    target_tranforms = T.Compose([
+        T.RandomPerspective(distortion_scale=0.4, p=0.5, interpolation=Image.BICUBIC),
+    ])
 
-    set_mean = [0.345, 0.275, 0.240]
-    set_std = [0.223, 0.199, 0.203]
+    set_mean = [0.461, 0.491, 0.270]
+    set_std = [0.156, 0.139, 0.161]
 
     save_path = lambda r : 'runs/run{:04d}_best_loss.pth'.format(r)
 
     train_transforms = T.Compose([
         CustomTransformation(),
-        T.RandomPerspective(distortion_scale=0.5, p=0.5, interpolation=Image.BICUBIC),
         T.Resize((input_size)),  # Make shortest edge this size
         T.ToTensor(),
         T.Normalize(mean=set_mean, std=set_std)
@@ -153,14 +160,17 @@ if __name__ == "__main__" and '__file__' in globals():
         # make datasets
         pass
     else:
-        train_dataset = LiveTargetDataset(transforms=train_transforms, input_size=expansion_factor*input_size,
-            target_size=expansion_factor*target_size, length=train_size, scale=scale, rotation=rotation)
-        val_dataset = LiveTargetDataset(transforms=val_transforms, input_size=expansion_factor*input_size,
-            target_size=expansion_factor*target_size, length=val_size, scale=scale, rotation=rotation)
+        train_dataset = LiveClassifyDataset(length=train_size, input_size=expansion_factor*input_size,
+            target_size=expansion_factor*target_size, scale=scale, rotation=rotation, bkg_path=bkg_path,
+            target_transforms=target_tranforms, transforms=train_transforms)
+        val_dataset = LiveClassifyDataset(length=val_size, input_size=expansion_factor*input_size,
+            target_size=expansion_factor*target_size, scale=scale, rotation=rotation, bkg_path=bkg_path,
+            target_transforms=target_tranforms, transforms=val_transforms)
 
-    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size
-        ,shuffle=shuffle, num_workers=num_workers, drop_last=drop_last)
-    val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size)
+    train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size ,shuffle=shuffle,
+            num_workers=num_workers, drop_last=drop_last)
+    val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size,
+            num_workers=num_workers, drop_last=drop_last)
 
     num_classes = val_dataset.gen.num_classes
     print("num_classes :", num_classes)
@@ -221,7 +231,7 @@ if __name__ == "__main__" and '__file__' in globals():
     def calc_loss(output, target):
         # Computing the loss and training metrics
         batch_correct = np.zeros(len(num_classes))
-        tasks_loss = Variable(torch.FloatTensor(len(num_classes))).zero_().to(device)
+        tasks_loss = Variable(torch.FloatTensor(len(num_classes))).zero_().to(device)  # TODO : does this need to be on GPU
         log_preds = np.zeros((batch_size, len(num_classes)))  # track predictions for logging
         for i in range(len(num_classes)):
             y = target
@@ -229,7 +239,7 @@ if __name__ == "__main__" and '__file__' in globals():
                 y = target[:, i]
             if output[i].shape[1] == 1:  # output is a scalar not class logits
                 tasks_loss[i] = scalar_loss(output[i], y)
-                batch_correct[i] += get_correct_scalar(output[i], y, angle_threshold)
+                batch_correct[i] += get_correct_scalar(output[i], y, scalar_threshold)
                 log_preds[:, i] = output[i].detach().cpu().squeeze().numpy()                   
             else:  # class cross entropy loss
                 # TODO : class weights
@@ -260,7 +270,8 @@ if __name__ == "__main__" and '__file__' in globals():
         c = 0
         for batch_idx, (data, target) in enumerate(dataloader):
             c +=1
-            data, target = data.to(device), target.to(device)
+            data = data.to(device)
+            target = target.to(device)
             optimizer.zero_grad()
             if use_amp:
                 with amp.autocast():
