@@ -3,8 +3,13 @@ __pycache__
 *.pyc
 .ipynb_checkpoints
 
-/images/
+# Too many files
 /backgrounds/
 
+# Dev images
+/images/*
+!images/readme
+
+# Ignore log data
 runs/*
 !runs/LASTRUN.txt
