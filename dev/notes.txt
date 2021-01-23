@@ -23,7 +23,7 @@ filters          blocks params   size   final accuracy                          
 32, 32, 64 , 128 2,4,2  857875   3.27MB [92.87719727 99.79248047 91.69921875 98.66333008 94.59838867] 0.6640
 32, 64, 64 , 128 2,3,2  898693   3.43MB [93.32275391 99.86572266 94.16503906 99.0234375  95.72753906] 0.5375
 32, 64, 128, 256 1,1,1  1233043  4.70MB [91.94946289 99.76196289 90.28320312 98.99902344 94.70825195] 0.7729
-*32, 64, 128, 256 1,1,1  2783091 10.61MB [93.99414062 99.8046875  97.41210938 99.75585938 96.82617188] 0.3334 w perspective transforms
+*32, 64, 128, 256 2,2,2  2783091 10.61MB [93.99414062 99.8046875  97.41210938 99.75585938 96.82617188] 0.3334 w perspective transforms
 
 
 /100
@@ -62,14 +62,15 @@ human readable: 18px no rotation, 22px rotation
 
 
 todo
-- save a dataset as files
-- new target sample function, make one for segementation too
-- use background images in target generator
-- write dataloader for image folder
+- save a classify dataset as files
+- write dataloader for classify folder
+- make segmentation image generator
+- write live segmentation dataset
+- save segmentation dataset as files
+- write dataloader for segmentation folder
 
--make evaluation dataset
--load the evaluate set and run statistics
-
+- make evaluation dataset
+- confusion matrix
 
 -class weights, some classes are more difficult, I vs H, I vs L vs 1, Z vs N, 0 vs O
   - can it be handled like an imbalanced dataset (undersample, oversample, )

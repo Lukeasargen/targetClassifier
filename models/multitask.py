@@ -2,6 +2,7 @@ from collections import OrderedDict
 
 import torch
 import torch.nn as nn  # Building the model
+import torch.nn.functional as F
 from torch.autograd import Variable
 from torchsummary import summary
 
@@ -56,7 +57,8 @@ class MultiTaskNet(nn.Module):
         x = self.basemodel.forward(x, dropout)
         outs = list()
         for index in range(len(self.num_classes)):
-            out = eval("self.ClassifierHead_" + str(index))(x)
+            x = F.dropout(x, p=dropout)
+            out = eval("self.ClassifierHead_"+str(index))(x)
             outs.append(out)
         return outs
 

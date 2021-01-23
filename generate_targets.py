@@ -30,7 +30,7 @@ def rotate_2d(vector, angle, degrees = False):
 class TargetGenerator():
     def __init__(self, img_size, target_size, scale=(1.0, 1.0), rotation=False,
             target_transforms=None, bkg_path=None):
-
+        """ For argument definitions, see the draw_targets() description """
         self.img_size = img_size
         self.target_size = target_size
         self.scale = scale
@@ -38,9 +38,10 @@ class TargetGenerator():
         self.target_transforms = target_transforms
         self.bkg_path = bkg_path
         if bkg_path:
-            self.bkg_count = 0
-            self.backgrounds = [pil_loader(os.path.join(os.getcwd(), bkg_path, x)) for x in os.listdir(bkg_path)]
-            self.bkg_choices = list(range(len(self.backgrounds)))
+            self.bkg_count = 0  # Track when all backgrounds are used and then reset
+            # TODO : resize to save memory???
+            self.backgrounds = [pil_loader(os.path.join(os.getcwd(), bkg_path, x)) for x in os.listdir(bkg_path)]  # list of pil images
+            self.bkg_choices = list(range(len(self.backgrounds)))  # List of indices that is looped through to select images in self.backgrounds
 
         self.shape_options = [
             "circle", "semicircle", "quartercircle", "triangle",
@@ -97,6 +98,7 @@ class TargetGenerator():
         ]
 
     def color_to_hsv(self, color):
+        """ Return a string that is used by PIL to specify HSL colorspace """
         options = {
             'red': lambda: (np.random.randint(0, 4), np.random.randint(50, 100), np.random.randint(40, 60)),
             'orange': lambda: (np.random.randint(9, 33), np.random.randint(50, 100), np.random.randint(40, 60)),
@@ -114,6 +116,8 @@ class TargetGenerator():
         return color_code
 
     def make_regular_polygon(self, radius, sides, angle, center=(0,0)):
+        """ Helper function that returns a list of tuples in a regular polygon
+            which are centered at the center argument. """
         step = 2*np.pi / sides
         points = []
         for i in range(sides):
@@ -123,6 +127,10 @@ class TargetGenerator():
 
     def draw_shape(self, draw, img_size, target_size, shape_idx, color,
             scale=(1.0, 1.0), rotation=False):
+        """ Do not use. this is called within draw_target.
+            This function draws the specified shape, color, scale, and rotation.
+            It returns values that specify how to draw the letter.
+        """
         shape = self.shape_options[shape_idx]
         r = (np.random.uniform(*scale)*target_size) // 2  # half width of target
         # Random center
@@ -231,9 +239,14 @@ class TargetGenerator():
         b2 = (cx+l, cy+l)
         # draw.pieslice([t2, b2], 0, 360, fill=(0,0,0))
 
+        # return center, letter_size, angle in degrees
         return (cx, cy), l, angle
 
     def draw_letter(self, draw, letter_size, letter_idx, color, angle):
+        """ Do not use. this is called within draw_target.
+            This function chooses a random font a draws the
+            specified letter on a transparent PIL image. This
+            image has the specified size, color, and angle."""
         font_path = random.choice(self.font_options)
         font = ImageFont.truetype(font_path, size=letter_size*2)
         w, h = draw.textsize(self.letter_options[letter_idx], font=font)
@@ -246,7 +259,23 @@ class TargetGenerator():
 
     def draw_target(self, img_size=None, target_size=None, scale=None, rotation=None,
             target_transforms=None, bkg_path=None):
-
+        """ Draws a random target on a transparent PIL image. Also returns the correct labels.
+            
+            img_size:
+                square size in pixels
+            target_size:
+                maximum diameter of circle that the target could fit inside
+            scale:
+                tuple likes this (0.5, 1.0), upper and lower bounds of the target_size. sampled uniformly
+            rotation:
+                boolean true or false. The orientation label is returned regardless.
+            target_transforms:
+                function that gets called on the final image before returning. 
+                It is best to just us the pytorch transforms or your own functions that work on PIL images
+            bkg_path:
+                if not None, then a target with transparent background is returned. else, a random
+                color is selected that is different from the shape and letter color
+        """
         if not img_size:
             img_size = self.img_size
         if not target_size:
@@ -302,6 +331,9 @@ class TargetGenerator():
         return img, label
 
     def get_background(self):
+        """ Works like a iterator that randomly samples the images loaded
+            from the bkg_path folder. The list is PIL images in ram. It
+            returns full resolution PIL image"""
         self.bkg_count += 1
         if self.bkg_count == len(self.backgrounds):
             np.random.shuffle(self.bkg_choices)
@@ -310,7 +342,8 @@ class TargetGenerator():
 
     def gen_classify(self, img_size=None, target_size=None, scale=None, rotation=None,
             target_transforms=None, bkg_path=None):
-        """ Generate a cropped target with it's classification label """
+        """ Generate a cropped target with it's classification label.
+            For argument explainations see the draw_targets() description."""
         if not img_size:
             img_size = self.img_size
         if not bkg_path:
@@ -326,8 +359,11 @@ class TargetGenerator():
         return img, label
 
     def gen_segment(self):
-        """ Generate an aerial image with it's target mask """
-        # TODO : fill the image with targets and 
+        """ Generate an aerial image with it's target mask. """
+        # TODO : fill the image with targets and create corresponding binary mask
+        # load the correct arguments based on the deafults and the ones passed in
+        # sample the target locations
+        # loops over the locations and add the target to the map and the mask
         return img, mask
 
 
@@ -345,20 +381,7 @@ def visualize_classify(gen):
     print(grid_img.shape)
     im = Image.fromarray(grid_img.astype('uint8'), 'RGB')
     im.show()
-    # im.save("targets.jpeg")
-
-
-def save_dataset(gen, name, resolution, num=1024):
-    # create folder
-    # create dataset folder
-    # create metadata frame
-    # for i in range(num):
-        # create name and path
-        # gen target and label
-        # save
-        # track statistics, save to txt
-
-    pass
+    im.save("high_res_targets.jpeg")
 
 
 if __name__ == "__main__":
@@ -366,15 +389,16 @@ if __name__ == "__main__":
     bkg_path = 'backgrounds'  # path to background images
     img_size = 32
     target_size = 30
-    scale = (0.6, 1.0)
+    scale = (0.7, 1.0)
     rotation = True
-    expansion_factor = 4  # generate higher resolution targets and downscale, improves aliasing effects
+    expansion_factor = 3  # generate higher resolution targets and downscale, improves aliasing effects
 
-    dataset_size = 10  # number of targets to create
     target_tranforms = T.Compose([
-        T.RandomPerspective(distortion_scale=0.4, p=1.0, interpolation=Image.BICUBIC),
+        T.RandomPerspective(distortion_scale=0.5, p=1.0, interpolation=Image.BICUBIC),
     ])
 
+    # create the generator object
+    # this can be used for classification and segmentation generation
     gen = TargetGenerator(img_size=expansion_factor*img_size, target_size=expansion_factor*target_size,
         scale=scale, rotation=rotation, target_transforms=target_tranforms, bkg_path=bkg_path)
     
@@ -382,6 +406,10 @@ if __name__ == "__main__":
     # x.show()
     # print(y)
 
+    # these will have lots of noise
+    # the preporcesing for the network does some pooling and filtering so don't worry about it
     visualize_classify(gen)
 
-    # save_dataset(gen, name, resolution=img_size, num=dataset_size)
+    # TODO
+    # img, mask = gen.gen_segment()
+

@@ -1,8 +1,8 @@
-scipy
-scikit-learn
-seaborn
 matplotlib
 opencv-python
+pandas
 tensorboard
 torchsummary
-pandas
+scikit-learn
+scipy
+seaborn

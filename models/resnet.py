@@ -184,10 +184,10 @@ if __name__ == "__main__":
 
     input_size = 32
     in_channels = 3
-    out_features = 100
+    out_features = 34
     avgpool_size = None  # input_size/( + 2*(num_blocks - 1 + first_conv stride)
-    filters = [64, 256, 512, 1024]
-    blocks = [2, 4, 2]
+    filters = [16, 16, 32, 64]
+    blocks = [2, 2, 2]
     bottleneck = False
     groups = 1
     width_per_group = None

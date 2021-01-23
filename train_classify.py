@@ -16,7 +16,7 @@ from torch.autograd import Variable
 from torch.cuda import amp
 
 from models.multitask import BuildMultiTaskResnet, save_multitask_resnet
-from dataset import LiveClassifyDataset
+from dataset_classify import LiveClassifyDataset, FolderClassifyDataset
 from custom_transforms import CustomTransformation
 
 
@@ -27,23 +27,24 @@ class Logger():
     def __init__(self, name, headers):
         self.name = name
         self.headers = headers
-        self.path = name + datetime.datetime.now().strftime("_%Y%m%d_%H%M%S") + ".csv"
-
-    def _make_file(self):
-        # create csv with headers
-        pass
+        self.path = "runs/" + name + datetime.datetime.now().strftime("_%Y%m%d_%H%M%S") + ".csv"
+        if not os.path.exists(self.path):
+            with open(self.path, 'a+', newline='') as f:
+                writer = csv.writer(f, delimiter=',')
+                writer.writerow(headers)
 
     def update(self, row_dict):
-        # supply data as a dictionary for the row with the headers as keywords
-        pass
+        with open(self.path, 'a+', newline='') as f:
+            writer = csv.writer(f, delimiter=',')
+            writer.writerow([row_dict[key] for key in self.headers])
 
 
 class WeightedTaskLoss(nn.Module):
-    """ https://arxiv.org/abs/1705.07115 """    
+    """ https://arxiv.org/abs/1705.07115 """
     def __init__(self, num_tasks):
         super(WeightedTaskLoss, self).__init__()
         self.num_tasks = num_tasks
-        self.sigma = nn.Parameter(torch.ones(num_tasks))
+        self.sigma = nn.Parameter( torch.ones(num_tasks) )
         self.mse = nn.MSELoss()
         self.cel = nn.CrossEntropyLoss()
 
@@ -92,7 +93,7 @@ if __name__ == "__main__" and '__file__' in globals():
     input_size = 32
     in_channels = 3
     backbone_features = 128
-    avgpool_size = 4
+    avgpool_size = 8
     filters = [32, 64, 64, 128]
     blocks = [2, 2, 2]
     bottleneck = False
@@ -102,8 +103,8 @@ if __name__ == "__main__" and '__file__' in globals():
     dropout = 0.0
     # num_classes is defined by the dataset
     # Training Hyperparameters
-    num_epochs = 50
-    validate = True
+    num_epochs = 40
+    validate = False
     batch_size = 256
     train_size = 16384
     val_size = 2048
@@ -116,29 +117,43 @@ if __name__ == "__main__" and '__file__' in globals():
     weight_decay = 0.0  # 0, 1e-5, 3e-5, 1e-4, 3e-4, 5e-4, 1e-4, 3e-4, 1e-3
     use_fp16 = False
     use_amp = False
-    lr_milestones = [40]
-    lr_gamma = 0.1
+    lr_milestones = [70]
+    lr_gamma = 0.1  # for StepLR
     use_lr_ramp_up = False
-    lr_ramp_base = 1e-3
-    lr_ramp_steps = 9
+    lr_ramp_base = 1e-2
+    lr_ramp_steps = 10
     use_weighted_loss = True
+    sigma_lr = base_lr/100  # lr of the output variance
+    show_graph = True  # use plt to graph, acc and loss
     scalar_threshold = 45/360  # scalar magnitude of difference to be correct
     # Dataset config
     dataset_folder = None  # root directory that has images and labels.csv, if None targets are made during the training
     val_split = 0.2  # percentage of dataset used for validation
-    bkg_path = 'backgrounds'  # path to background images, None is a random color background
+    bkg_path = None  # path to background images, None is a random color background
     target_size = 30
-    scale = (0.6, 1.0)
+    scale = (0.7, 1.0)
     rotation = True
-    expansion_factor = 4  # generate higher resolution targets and downscale, improves aliasing effects
+    expansion_factor = 3  # generate higher resolution targets and downscale, improves aliasing effects
     target_tranforms = T.Compose([
-        T.RandomPerspective(distortion_scale=0.4, p=0.5, interpolation=Image.BICUBIC),
+        T.RandomPerspective(distortion_scale=0.5, p=1.0, interpolation=Image.BICUBIC),
     ])
 
-    set_mean = [0.461, 0.491, 0.270]
-    set_std = [0.156, 0.139, 0.161]
+
+    # synthetic
+    set_mean = [0.545, 0.432, 0.382]
+    set_std = [0.151, 0.147, 0.166]
+
+    # backgrounds
+    # set_mean = [0.456, 0.494, 0.259]
+    # set_std = [0.153, 0.135, 0.150]
 
     save_path = lambda r : 'runs/run{:04d}_best_loss.pth'.format(r)
+
+    log_headers = [
+        "epoch", "iterations",
+        "train_loss", "train_loss_tasks", "train_acc_mean", "train_acc_tasks",
+        # "val_loss", "val_loss_tasks", "val_acc_mean", "val_acc_tasks"
+    ]
 
     train_transforms = T.Compose([
         CustomTransformation(),
@@ -168,7 +183,8 @@ if __name__ == "__main__" and '__file__' in globals():
             target_transforms=target_tranforms, transforms=val_transforms)
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size ,shuffle=shuffle,
-            num_workers=num_workers, drop_last=drop_last)
+            num_workers=num_workers, drop_last=drop_last,
+            pin_memory=False, prefetch_factor=2, persistent_workers=False)
     val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size,
             num_workers=num_workers, drop_last=drop_last)
 
@@ -203,7 +219,7 @@ if __name__ == "__main__" and '__file__' in globals():
         weighted_loss_citerion = WeightedTaskLoss(num_tasks=len(num_classes)).to(device)
     params = [{'params': model.parameters(), 'lr': base_lr}]
     if weighted_loss_citerion:
-        params.append({'params': weighted_loss_citerion.parameters(), 'lr': base_lr/100})
+        params.append({'params': weighted_loss_citerion.parameters(), 'lr': sigma_lr})
     optimizer = optim.SGD(params,
                         lr=base_lr,
                         momentum=momentum,
@@ -220,6 +236,7 @@ if __name__ == "__main__" and '__file__' in globals():
             group["lr"] = lr_ramp_base
 
     # Training
+    iterations = 0
     train_loss = np.zeros((num_epochs, len(num_classes)))
     train_accuracy = np.zeros((num_epochs, len(num_classes)))
     valid_loss = np.zeros((num_epochs, len(num_classes)))
@@ -257,6 +274,7 @@ if __name__ == "__main__" and '__file__' in globals():
         return batch_loss, tasks_loss, batch_correct, log_preds
 
     def train(epoch, model, optimizer, dataloader, scalar, train=False):
+        global iterations
         epoch_loss = 0
         tasks_loss_epoch = 0
         total_items = 0
@@ -302,28 +320,41 @@ if __name__ == "__main__" and '__file__' in globals():
                 else:
                     batch_loss.backward()
                     optimizer.step()
+                iterations += 1
 
         # END BATCH LOOP
 
         # Epoch metrics
         unit_loss = epoch_loss / len(dataloader)
-        acc = 100 * correct / total_items
-
-        # print("tasks_loss_epoch :", tasks_loss_epoch.tolist())
-        print("acc post :", acc)
-        print("EPOCH {}. train={}. Accuracy={:.2f}%. Loss={:.4f}".format(epoch, train, acc.mean(), unit_loss))
+        acc_tasks = 100 * correct / total_items
+        loss_tasks = (tasks_loss_epoch.detach().cpu().numpy()/c)
 
         if train:
-            train_loss[epoch-1] = (tasks_loss_epoch.detach().cpu().numpy()/c)
-            train_accuracy[epoch-1] = (acc)
+            train_loss[epoch-1] = loss_tasks
+            train_accuracy[epoch-1] = (acc_tasks)
             if weighted_loss_citerion:
                 sigma[epoch-1] = weighted_loss_citerion.sigma.data.detach().cpu().numpy()
             current_lr[epoch-1] = optimizer.param_groups[0]['lr']
         else:
-            valid_loss[epoch-1] = (tasks_loss_epoch.detach().cpu().numpy()/c)
-            valid_accuracy[epoch-1] = (acc)
+            valid_loss[epoch-1] = loss_tasks
+            valid_accuracy[epoch-1] = (acc_tasks)
 
-        return unit_loss
+        # print("tasks_loss_epoch :", tasks_loss_epoch.tolist())
+        print("acc post :", acc_tasks)
+        # print("sigma :", weighted_loss_citerion.sigma.data.detach().cpu().numpy())
+        print("EPOCH {}. train={}. Accuracy={:.2f}%. Loss={:.4f}".format(epoch, train, acc_tasks.mean(), unit_loss))
+
+        if train:
+            prefix = "train"
+        else:
+            prefix = "val"
+        metrics = {
+            f"{prefix}_loss": unit_loss,
+            f"{prefix}_loss_tasks": loss_tasks,
+            f"{prefix}_acc_mean": acc_tasks.mean(),
+            f"{prefix}_acc_tasks": acc_tasks, 
+        }
+        return metrics
 
         # END TRAIN FUNCTION
 
@@ -338,15 +369,27 @@ if __name__ == "__main__" and '__file__' in globals():
     with open('runs/LASTRUN.txt', 'w') as f:
         f.write("%s\n" % current_run)
 
+
+    # Create logger
+    log_name = "run{:04d}".format(current_run)
+
+    logger = Logger(name=log_name, headers=log_headers)
+
     best_loss = None
+    best_loss_epoch = 0
 
     t0 = time.time()
     for epoch in range(num_epochs):
         epoch += 1
         t1 = time.time()
-        epoch_loss = train(epoch, model, optimizer, train_loader, scalar, train=True)
+        epoch_metrics = {"epoch": epoch}
+        train_metrics = train(epoch, model, optimizer, train_loader, scalar, train=True)
+        epoch_metrics.update(train_metrics)
         if validate:
-            epoch_loss = train(epoch, model, optimizer, val_loader, scalar, train=False)
+            val_metrics = train(epoch, model, optimizer, val_loader, scalar, train=False)
+            epoch_metrics.update(val_metrics)
+        epoch_metrics.update({"iterations": iterations})
+
         duration = time.time()-t1
         print("EPOCH {}/{}. Epoch Duration={}. Run Duration={}. Remaining={}".format(epoch, num_epochs, time_to_string(duration), time_to_string(time.time()-t0), time_to_string(duration*(num_epochs-epoch))))
         
@@ -365,59 +408,64 @@ if __name__ == "__main__" and '__file__' in globals():
                 print("MILESTONE {}: lr reduced to {}".format(epoch, new_lr))
         
         if best_loss == None:
-            best_loss = epoch_loss
+            best_loss = train_metrics["train_loss"]
             best_model = copy.deepcopy(model)
-        elif epoch_loss < best_loss:
-            best_loss = epoch_loss
+        elif train_metrics["train_loss"] < best_loss:
+            best_loss_epoch = epoch
+            best_loss = train_metrics["train_loss"]
             best_model = copy.deepcopy(model)
+
+        logger.update(epoch_metrics)
 
         # END TRAIN LOOP
 
+    print("Best Loss Epoch {} : {:.4f}".format(best_loss_epoch, best_loss))
+
     save_multitask_resnet(best_model, save_path(current_run), input_size, set_mean, set_std)
 
-    # exit()
+    if show_graph:
 
-    # Display loss graphs
-    line_colors = [
-        '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
-    ]
-    labels_str = [
-        "Orientation", "Shape", "Letter", "Shape Color", "Letter Color"
-    ]
+        # Display loss graphs
+        line_colors = [
+            '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
+        ]
+        labels_str = [
+            "Orientation", "Shape", "Letter", "Shape Color", "Letter Color"
+        ]
 
 
-    fig, ax = plt.subplots(2, 2)
+        fig, ax = plt.subplots(2, 2)
 
-    color = 'tab:red'
-    ax[0][0].set_xlabel('epochs', fontsize=16)
-    ax[0][0].set_ylabel('accuracy %', fontsize=16, color=color)
-    ax[0][0].tick_params(axis='y', labelcolor=color)
-    for i in range(len(num_classes)):
-        ax[0][0].plot(range(1, num_epochs+1), train_accuracy[:,i], color=line_colors[i], label=labels_str[i])
-        if validate:
-            ax[0][0].plot(range(1, num_epochs+1), valid_accuracy[:,i], color=line_colors[i], linestyle='dashed')
-    ax[0][0].legend()
-
-    color = 'tab:blue'
-    ax[0][1].set_ylabel('loss', fontsize=16, color=color)  # we already handled the x-label with ax1
-    ax[0][1].tick_params(axis='y', labelcolor=color)
-    for i in range(len(num_classes)):
-        ax[0][1].plot(range(1, num_epochs+1), train_loss[:,i], color=line_colors[i], label=labels_str[i])
-        if validate:
-            ax[0][1].plot(range(1, num_epochs+1), valid_loss[:,i], color=line_colors[i], linestyle='dashed')
-
-    ax[1][0].set_ylabel('learning rate', fontsize=16)  # we already handled the x-label with ax1
-    ax[1][0].tick_params(axis='y')
-    ax[1][0].plot(range(1, num_epochs+1), current_lr)
-
-    if weighted_loss_citerion:
-        color = 'tab:green'
-        ax[1][1].set_ylabel('sigma', fontsize=16, color=color)  # we already handled the x-label with ax1
-        ax[1][1].tick_params(axis='y', labelcolor=color)
+        color = 'tab:red'
+        ax[0][0].set_xlabel('epochs', fontsize=16)
+        ax[0][0].set_ylabel('accuracy %', fontsize=16, color=color)
+        ax[0][0].tick_params(axis='y', labelcolor=color)
         for i in range(len(num_classes)):
-            ax[1][1].plot(range(1, num_epochs+1), sigma[:,i], color=line_colors[i], label=labels_str[i])
+            ax[0][0].plot(range(1, num_epochs+1), train_accuracy[:,i], color=line_colors[i], label=labels_str[i])
+            if validate:
+                ax[0][0].plot(range(1, num_epochs+1), valid_accuracy[:,i], color=line_colors[i], linestyle='dashed')
+        ax[0][0].legend()
+
+        color = 'tab:blue'
+        ax[0][1].set_ylabel('loss', fontsize=16, color=color)  # we already handled the x-label with ax1
+        ax[0][1].tick_params(axis='y', labelcolor=color)
+        for i in range(len(num_classes)):
+            ax[0][1].plot(range(1, num_epochs+1), train_loss[:,i], color=line_colors[i], label=labels_str[i])
+            if validate:
+                ax[0][1].plot(range(1, num_epochs+1), valid_loss[:,i], color=line_colors[i], linestyle='dashed')
+
+        ax[1][0].set_ylabel('learning rate', fontsize=16)  # we already handled the x-label with ax1
+        ax[1][0].tick_params(axis='y')
+        ax[1][0].plot(range(1, num_epochs+1), current_lr)
+
+        if weighted_loss_citerion:
+            color = 'tab:green'
+            ax[1][1].set_ylabel('sigma', fontsize=16, color=color)  # we already handled the x-label with ax1
+            ax[1][1].tick_params(axis='y', labelcolor=color)
+            for i in range(len(num_classes)):
+                ax[1][1].plot(range(1, num_epochs+1), sigma[:,i], color=line_colors[i], label=labels_str[i])
 
 
-    fig.tight_layout()  # otherwise the right y-label is slightly clipped
+        fig.tight_layout()  # otherwise the right y-label is slightly clipped
 
-    plt.show()
+        plt.show()

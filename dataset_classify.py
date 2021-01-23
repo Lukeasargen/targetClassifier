@@ -21,6 +21,7 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 class LiveClassifyDataset(Dataset):
     def __init__(self, length, input_size, target_size, scale=(1.0, 1.0), rotation=False, bkg_path=None,
             target_transforms=None, transforms=None):
+        """ Dataset that makes generator object and calls it in __getitem__ """
         self.length = length
         self.input_size = input_size
         self.target_size = target_size
@@ -43,6 +44,8 @@ class LiveClassifyDataset(Dataset):
 
 class FolderClassifyDataset(Dataset):
     def __init__(self, root, transforms):
+        """ Dataset from a folder at root.
+            This corresponds to the output from save_classify()."""
         self.transforms = T.Compose([T.ToTensor()])
         if transforms == None:
             self.transforms = transforms
@@ -73,6 +76,39 @@ def visualize_dataloader(dataloader):
         ax.imshow(make_grid((images.detach()[:64]), nrow=8).permute(1, 2, 0))
         break
     plt.show()
+    fig.savefig('classify_processed.png', bbox_inches='tight')
+
+
+def visualize_labels(dataloader):
+    height = 4
+    width = 4
+    fig, axarr = plt.subplots(height, width)
+    np.vectorize(lambda axarr:axarr.axis('off'))(axarr)  # https://stackoverflow.com/questions/34686414/turn-axes-off-for-all-subplots-of-a-figure?rq=1
+    for images, labels in dataloader:
+        images = images.detach()[:height*width]
+        labels = labels.detach()[:height*width]
+        break
+
+    def fl(label):
+        label = label.tolist()
+        out = ""
+        out += "Orientation: " + str(int(label[0])) + "\n"
+        out += "Shape: " + str(dataloader.dataset.gen.shape_options[int(label[1])]) + "\n"
+        out += "Letter: " + str(dataloader.dataset.gen.letter_options[int(label[2])]) + "\n"
+        out += "Shape Color: " + str(dataloader.dataset.gen.color_options[int(label[3])]) + "\n"
+        out += "Letter Color: " + str(dataloader.dataset.gen.color_options[int(label[4])])
+        return out
+
+    idx = 0
+    for i in range(height):
+        for j in range(width):
+            img = images[idx]
+            axarr[i][j].imshow(np.array(img).transpose((1,2,0)))
+            axarr[i][j].text(32, 20, fl(labels[idx]), style='italic',
+                bbox={'facecolor': 'grey', 'alpha': 1.0}, fontsize=12)
+            idx +=1
+    plt.show()
+    fig.savefig('classify_labels.png', bbox_inches='tight')
 
 
 def dataset_stats(dataset, num=1000):
@@ -92,29 +128,84 @@ def dataset_stats(dataset, num=1000):
             t2 = time.time()
             print("{}/{} measured. Total time={:.2f}s. Images per second {:.2f}.".format(i+1, n, t2-t0, 100/(t2-t1)))
             t1 = t2
+    print("mean :", mean/n)
+    print("std :", np.sqrt(var/n))
+
+
+def time_dataloader(dataset, batch_size=64, max_num_workers=8):
+    import psutil
+    print("Time Dataloader")
+    results = []
+    ram = []
+    for i in range(max_num_workers+1):
+        print("Running with {} workers".format(i))
+        ram_before = psutil.virtual_memory()[3]
+        train_loader = DataLoader(
+            dataset=dataset, batch_size=batch_size, shuffle=False,
+            num_workers=i, drop_last=True,
+            pin_memory=False, prefetch_factor=2, persistent_workers=False)
+        t0 = time.time()
+        max_ram = 0
+        for batch_idx, (data, target) in enumerate(train_loader):
+            r = psutil.virtual_memory()[3]
+            if r > max_ram:
+                max_ram = r
+        # ram after
+        ram_usage = max_ram - ram_before
+        duration = time.time()-t0
+        results.append(duration)
+        ram.append(ram_usage)
+
+    for i in range(len(results)):
+        print("{:.2f} seconds with {} workers. {:.2f} seconds per {} batches. {:.3f} GB ram.".format(results[i], i, results[i]/(batch_idx+1), batch_idx+1, ram[i]*1e-9))
+
+
+def save_classify(gen, name, resolution, num=1024):
+
+    # create folder
+
+    # create dataset folder
+
+    # create metadata frame
+
+    mean = 0.0
+    var = 0.0
+    t0 = time.time()
+    t1 = t0
+    for i in range(num):
+
+        # create name and path
+
+        # img in shape [W, H, C]
+        img, y = gen.gen_classify()
+        # [1, C, H, W], expand so that the mean function can run on dim=0
+        img = np.expand_dims((np.array(img)), axis=0)
+        mean += np.mean(img, axis=(0, 2, 3))
+        var += np.var(img, axis=(0, 2, 3))  # you can add var, not std
+
+        # save image
+
+        # save metadata
+
+
+        if (i+1) % 100 == 0:
+            t2 = time.time()
+            print("{}/{} measured. Total time={:.2f}s. Images per second {:.2f}.".format(i+1, n, t2-t0, 100/(t2-t1)))
+            t1 = t2
     print("mean :", mean/num)
     print("std :", np.sqrt(var/num))
 
+    # save dataset information
 
-def time_dataloader(datalodaer, max_num_workers=4):
-    for i in range(max_num_workers+1):
-        train_loader = DataLoader(
-            dataset=train_dataset
-            ,batch_size=batch_size
-            ,shuffle=shuffle
-            ,num_workers=i
-            ,drop_last=drop_last)
-        t0 = time.time()
-        for batch_idx, (data, target) in enumerate(train_loader):
-            pass
-        print("{:.6f} seconds with {} workers.".format(time.time()-t0, i))
+    # columns, mean, std
 
+    pass
 
 if __name__ == "__main__":
 
     input_size = 32
     batch_size = 256
-    train_size = 16384
+    train_size = 4096
     val_size = 1024
     shuffle = False
     num_workers = 0
@@ -122,13 +213,13 @@ if __name__ == "__main__":
 
     dataset_folder = None  # root directory that has images and labels.csv, if None targets are made during the training
     val_split = 0.2  # percentage of dataset used for validation
-    bkg_path = 'backgrounds'  # path to background images, None is a random color background
+    bkg_path = None  # path to background images, None is a random color background
     target_size = 30
-    scale = (0.6, 1.0)
+    scale = (0.7, 1.0)
     rotation = True
-    expansion_factor = 4  # generate higher resolution targets and downscale, improves aliasing effects
+    expansion_factor = 3  # generate higher resolution targets and downscale, improves aliasing effects
     target_tranforms = T.Compose([
-        T.RandomPerspective(distortion_scale=0.4, p=0.5, interpolation=Image.BICUBIC),
+        T.RandomPerspective(distortion_scale=0.5, p=1.0, interpolation=Image.BICUBIC),
     ])
 
     train_transforms = T.Compose([
@@ -163,15 +254,19 @@ if __name__ == "__main__":
             num_workers=num_workers, drop_last=drop_last)
 
     x, y = train_dataset[0]
-    print(x.shape)
-    print(y.shape)
+    print("Image :", x.shape)
+    print("Label :", y, y.shape)
 
     # im = T.ToPILImage(mode='RGB')(x)
     # im.show()
 
-    visualize_dataloader(train_loader)
+    # visualize_dataloader(train_loader)
 
-    dataset_stats(train_dataset, num=2000)
+    # visualize_labels(train_loader)
 
-    # time_dataloader(train_loader, max_num_workers=8)
+    # dataset_stats(train_dataset, num=2000)
 
+    # time_dataloader(train_dataset, batch_size, max_num_workers=8)
+
+    # TODO
+    # save_classify(gen, name, resolution=img_size, num=dataset_size)
