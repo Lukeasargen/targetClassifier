@@ -123,3 +123,20 @@ c
 .detach()  #doesn't transfer gpu memory, reemove any a attatched to the variable
 
 
+Unet
+arguments
+input channels
+output channels
+filters, length is the number of downsamples
+pad, boolean, False does true convolution and crops the skip connections
+forward pass needs dropout during downsampling
+kernel size on the downsample, changes the crop
+
+experiments
+padding vs true convolution
+activation on the transpose convolution
+maxpooling vs stride=2
+
+
+
+max pooling cases problems if image down samples to odd width or height

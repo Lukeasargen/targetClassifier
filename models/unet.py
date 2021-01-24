@@ -7,21 +7,6 @@ from torchsummary import summary
 
 import torchvision
 
-# arguments
-# input channels
-# output channels
-# filters, length is the number of downsamples
-# pad, boolean, False does true convolution and crops the skip connections
-
-# forward pass needs dropout during downsampling
-
-# experiments
-# padding vs true convolution
-# activation on the transpose convolution
-# maxpooling vs stride=2
-
-# kernel size on the first conv
-# kernel size on the downsample, changes the crop
 
 
 def save_unet():
@@ -38,17 +23,16 @@ class TwoConvBlock(nn.Module):
         super().__init__()
         # TODO : batchnorm? or use bias?
         # paper did not use batchnorm
-        modules = [
+        self.block = nn.Sequential(
             nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
-                kernel_size=(3, 3), stride=1, padding=0, bias=True),
-            # nn.BatchNorm2d(out_channels),
+                kernel_size=(3, 3), stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
             nn.Conv2d(in_channels=out_channels, out_channels=out_channels,
-                kernel_size=(3, 3), stride=1, padding=0, bias=True),
-            # nn.BatchNorm2d(out_channels),
+                kernel_size=(3, 3), stride=1, padding=0, bias=False),
+            nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
-        ]
-        self.block = nn.Sequential(*modules)
+        )
     
     def forward(self, x):
         return self.block(x)
@@ -58,43 +42,51 @@ class DownSample(nn.Module):
     def __init__(self, in_channels, filters):
         super().__init__()
         filters.insert(0, in_channels)
-        blocks = [ TwoConvBlock(filters[i], filters[i+1]) for i in range(len(filters)-1) ]
-        self.blocks = nn.ModuleList(blocks)
+        self.blocks = nn.ModuleList([TwoConvBlock(filters[i], filters[i+1]) for i in range(len(filters)-1)])
         self.pool = nn.MaxPool2d(2)
-
+    
     def forward(self, x):
-        out = []  # list of outputs from all TwoConvBlock downsampling
-        for b in self.blocks:
-            x = b(x)
+        out = []
+        for block in self.blocks:
+            x = block(x)
             out.append(x)
             x = self.pool(x)
-        return out 
+        return out
 
 
 class UpSample(nn.Module):
     def __init__(self, filters):
         super().__init__()
         filters.reverse()
-        upconvs = [ nn.ConvTranspose2d(filters[i], filters[i+1], kernel_size=2, stride=2, bias=True) for i in range(len(filters)-1) ]
-        self.upconvs = nn.ModuleList(upconvs)
-        blocks = [ TwoConvBlock(filters[i], filters[i+1]) for i in range(len(filters)-1) ]
-        self.blocks = nn.ModuleList(blocks)
+        self.upconvs = nn.ModuleList([nn.ConvTranspose2d(filters[i], filters[i+1], kernel_size=2, stride=2, bias=True) for i in range(len(filters)-1)])
+        self.blocks = nn.ModuleList([TwoConvBlock(filters[i], filters[i+1]) for i in range(len(filters)-1)])
 
     def forward(self, x, skips):
         out = x
-        for i in range(len(self.upconvs)-1):
+        for i in range(len(self.upconvs)):
+            # print(i, "before up :", out.shape)
             out = self.upconvs[i](out)
-            temp = self.crop(skips[i], out)
-            out = torch.cat([out, temp], dim=1)
+            # print(i, "after up :", out.shape)
+            out = self.crop_and_cat(out, skips[i])
+            # print(i, "after cat :", out.shape)
             out = self.blocks[i](out)
+            # print(i, "after block :", out.shape)
         return out
     
-    def crop(self, x, target):
-        """ Takes x and crops it to size of target. 
-            Assumes target is always smaller than x."""
-        dh = ( x.shape[2] - target.shape[2] ) // 2
-        dw = ( x.shape[3] - target.shape[3] ) // 2
-        return x[:, :, dh:x.shape[2]-dh, dw:x.shape[3]-dw]
+    def crop_and_cat(self, upsample, skip):
+        """ Takes upsample and crops it to size of skip. 
+            Assumes skip is always smaller than upsample."""
+        # print("upsample.shape :", upsample.shape)
+        # print("skip.shape :", skip.shape)
+        dh = ( skip.shape[2] - upsample.shape[2] ) // 2
+        dw = ( skip.shape[3] - upsample.shape[3] ) // 2
+        # print("dh :", dh)
+        # print("dw :", dw)
+        crop = skip[:, :, dh:skip.shape[2]-dh, dw:skip.shape[3]-dw]
+        # print("crop.shape :", crop.shape)
+        out = torch.cat([crop, upsample], dim=1)
+        # print("out.shape :", out.shape)
+        return out
 
 
 class Unet(nn.Module):
@@ -106,11 +98,14 @@ class Unet(nn.Module):
         }
         self.down = DownSample(in_channels, filters.copy())
         self.up = UpSample(filters.copy())
-        self.head = nn.Conv2d(in_channels=filters[-1], out_channels=out_channels,
+        self.head = nn.Conv2d(in_channels=filters[0], out_channels=out_channels,
                 kernel_size=(1, 1), stride=1, padding=0, bias=True)
 
     def forward(self, x):
+        out = None
         skips = self.down(x)
+        # for i, x in enumerate(skips[::-1]):
+        #     print(i, x.shape)
         out = self.up(skips[::-1][0], skips[::-1][1:])
         out = self.head(out)
         return out
@@ -123,27 +118,12 @@ if __name__ == "__main__":
     input_size = 572
     in_channels = 3
     out_channels = 1
-    filters = [16, 32, 64]
-
-
     filters = [64,128,256,512,1024]
-    # down = DownSample(in_channels, filters)
-    x = torch.randn(1, 3, 572, 572)
-    # skip = down(x)
-    # for c in skip:
-    #     print("Down :", c.shape)
-
-    # up = UpSample(filters)
-    # x = torch.randn(1, 1024, 28, 28)
-    # m = up(x, skip[::-1][1:])
-    # print(m.shape)
-
 
     model = Unet(in_channels, out_channels, filters)
 
-    out = model(x)
+    # x = torch.randn(1, in_channels, input_size, input_size)
+    # out = model(x)
+    # print(out.shape)
 
-    print(out.shape)
-
-    print(model)
-    # summary(model.to(device), (in_channels, input_size, input_size))
+    summary(model.to(device), (in_channels, input_size, input_size))
