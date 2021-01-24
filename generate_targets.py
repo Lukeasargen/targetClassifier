@@ -79,15 +79,7 @@ class TargetGenerator():
         self.angle_options = [
             "N", "NE", "E", "SE", "S", "SW", "W", "NW"
         ]
-        self.angle_quantization = 16
-
-        # Reduce for debugging
-        # self.shape_options = [
-        #     "star", "circle", "square", "trapezoid", "pentagon"
-        # ]
-        # self.color_options = [
-        #     'white', 'black', 'red', 'blue'
-        # ]
+        self.angle_quantization = 8
 
         self.num_classes = [
             self.angle_quantization,
@@ -163,8 +155,11 @@ class TargetGenerator():
             bot = (cx+(rr)+sx, cy+(rr)+sy)
             draw.pieslice([top, bot], 180-angle, -angle, fill=color)
         elif shape == "square":
+            radius = r*np.random.randint(85, 100) / 100
             l = int( ( r*np.random.randint(70, 90) ) / ( 100*np.sqrt(2) ) )
-            draw.regular_polygon((cx, cy, r), n_sides=4, rotation=angle, fill=color)
+            b = np.random.choice([0, 45])
+            points = self.make_regular_polygon(radius, 4, -angle+b, center=(cx, cy))
+            draw.polygon(points, fill=color)
         elif shape == "triangle":
             radius = r*np.random.randint(85, 100) / 100
             l = int(radius*np.random.randint(40, 50) / 100)
@@ -318,8 +313,9 @@ class TargetGenerator():
             img = target  # return the target with transparency
 
         # Quantize angle in cw direction
-        # mod by quantization to avoid error at 0 degrees (rotation=False)        
-        orientation = int(np.floor((360-orientation)*(self.angle_quantization)/360)) % self.angle_quantization
+        # mod by quantization to avoid error at 0 degrees (rotation=False)
+        offset =   360 / self.angle_quantization
+        orientation = int(np.floor((360-orientation-offset)*(self.angle_quantization)/360)) % self.angle_quantization
 
         label = {
             "orientation": orientation,
@@ -381,12 +377,12 @@ def visualize_classify(gen):
     print(grid_img.shape)
     im = Image.fromarray(grid_img.astype('uint8'), 'RGB')
     im.show()
-    im.save("high_res_targets.jpeg")
+    im.save("images/igh_res_targets.jpeg")
 
 
 if __name__ == "__main__":
 
-    bkg_path = 'backgrounds'  # path to background images
+    bkg_path = None  # path to background images
     img_size = 32
     target_size = 30
     scale = (0.7, 1.0)

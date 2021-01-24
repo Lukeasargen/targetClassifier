@@ -199,5 +199,3 @@ if __name__ == "__main__":
 
     # print(model)
     summary(model.to(device), (in_channels, input_size, input_size))
-
-    exit()

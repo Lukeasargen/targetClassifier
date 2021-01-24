@@ -75,8 +75,8 @@ def visualize_dataloader(dataloader):
         ax.set_xticks([]); ax.set_yticks([])
         ax.imshow(make_grid((images.detach()[:64]), nrow=8).permute(1, 2, 0))
         break
-    plt.show()
     fig.savefig('classify_processed.png', bbox_inches='tight')
+    plt.show()
 
 
 def visualize_labels(dataloader):
@@ -92,7 +92,10 @@ def visualize_labels(dataloader):
     def fl(label):
         label = label.tolist()
         out = ""
-        out += "Orientation: " + str(int(label[0])) + "\n"
+        if dataloader.dataset.gen.angle_quantization == 8:
+            out += "Orientation: " + str(dataloader.dataset.gen.angle_options[int(label[0])]) + "\n"
+        else:
+            out += "Orientation: " + str(int(label[0])) + "\n"
         out += "Shape: " + str(dataloader.dataset.gen.shape_options[int(label[1])]) + "\n"
         out += "Letter: " + str(dataloader.dataset.gen.letter_options[int(label[2])]) + "\n"
         out += "Shape Color: " + str(dataloader.dataset.gen.color_options[int(label[3])]) + "\n"
@@ -105,10 +108,10 @@ def visualize_labels(dataloader):
             img = images[idx]
             axarr[i][j].imshow(np.array(img).transpose((1,2,0)))
             axarr[i][j].text(32, 20, fl(labels[idx]), style='italic',
-                bbox={'facecolor': 'grey', 'alpha': 1.0}, fontsize=12)
+                bbox={'facecolor': 'grey', 'alpha': 1.0}, fontsize=8)
             idx +=1
+    fig.savefig('images/classify_labels.png', bbox_inches='tight')
     plt.show()
-    fig.savefig('classify_labels.png', bbox_inches='tight')
 
 
 def dataset_stats(dataset, num=1000):
@@ -142,8 +145,7 @@ def time_dataloader(dataset, batch_size=64, max_num_workers=8):
         ram_before = psutil.virtual_memory()[3]
         train_loader = DataLoader(
             dataset=dataset, batch_size=batch_size, shuffle=False,
-            num_workers=i, drop_last=True,
-            pin_memory=False, prefetch_factor=2, persistent_workers=False)
+            num_workers=i, drop_last=True)
         t0 = time.time()
         max_ram = 0
         for batch_idx, (data, target) in enumerate(train_loader):
@@ -215,7 +217,7 @@ if __name__ == "__main__":
     val_split = 0.2  # percentage of dataset used for validation
     bkg_path = None  # path to background images, None is a random color background
     target_size = 30
-    scale = (0.7, 1.0)
+    scale = (0.8, 1.0)
     rotation = True
     expansion_factor = 3  # generate higher resolution targets and downscale, improves aliasing effects
     target_tranforms = T.Compose([
@@ -260,13 +262,13 @@ if __name__ == "__main__":
     # im = T.ToPILImage(mode='RGB')(x)
     # im.show()
 
-    # visualize_dataloader(train_loader)
+    visualize_dataloader(train_loader)
 
     # visualize_labels(train_loader)
 
     # dataset_stats(train_dataset, num=2000)
 
-    # time_dataloader(train_dataset, batch_size, max_num_workers=8)
+    # time_dataloader(train_dataset, batch_size, max_num_workers=3)
 
     # TODO
     # save_classify(gen, name, resolution=img_size, num=dataset_size)

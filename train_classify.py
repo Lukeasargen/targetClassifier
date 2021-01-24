@@ -152,8 +152,9 @@ if __name__ == "__main__" and '__file__' in globals():
     log_headers = [
         "epoch", "iterations",
         "train_loss", "train_loss_tasks", "train_acc_mean", "train_acc_tasks",
-        # "val_loss", "val_loss_tasks", "val_acc_mean", "val_acc_tasks"
     ]
+    if validate:
+        log_headers += ["val_loss", "val_loss_tasks", "val_acc_mean", "val_acc_tasks"]
 
     train_transforms = T.Compose([
         CustomTransformation(),
@@ -183,8 +184,7 @@ if __name__ == "__main__" and '__file__' in globals():
             target_transforms=target_tranforms, transforms=val_transforms)
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size ,shuffle=shuffle,
-            num_workers=num_workers, drop_last=drop_last,
-            pin_memory=False, prefetch_factor=2, persistent_workers=False)
+            num_workers=num_workers, drop_last=drop_last)
     val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size,
             num_workers=num_workers, drop_last=drop_last)
 
