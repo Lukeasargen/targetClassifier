@@ -66,23 +66,24 @@ todo
 - write dataloader for classify folder
 - make segmentation image generator
 - write live segmentation dataset
+- build unet
 - save segmentation dataset as files
 - write dataloader for segmentation folder
 
 - make evaluation dataset
 - confusion matrix
+- train with weight decay
+- train with Adam, AdamW
 
 -class weights, some classes are more difficult, I vs H, I vs L vs 1, Z vs N, 0 vs O
   - can it be handled like an imbalanced dataset (undersample, oversample, )
-- test speed
-  - nn.dropout vs F.dropout
 -visualize the metrics, confusion matrix, make jupyter notebook
   - evaluate x images
   - calc metrics
     -by task and class, accuracy, precision, recall, specificty, f1 score, matthews coreelation coefficient, confusion matrix
   - write function that visualizes images, targets, and outputs
     - highlight errors
-    - or only show outputs that have erros (100% accuracte labels not shown)
+    - or only show outputs that have errors (100% accurate labels not shown)
 
 for visualizing final model outputs
 
@@ -110,9 +111,39 @@ def visualize(image , actual , pred):
 
 visualize(image[1] , label[1].tolist() , output[1].tolist())
 
-c
 
+LiveClassifyDataset - no background
+8.52 seconds with 0 workers. 0.53 seconds per 16 batches. 0.019 GB ram.
+9.71 seconds with 1 workers. 0.61 seconds per 16 batches. 0.125 GB ram.
+5.37 seconds with 2 workers. 0.34 seconds per 16 batches. 0.242 GB ram.
+4.37 seconds with 3 workers. 0.27 seconds per 16 batches. 0.362 GB ram.
+3.39 seconds with 4 workers. 0.21 seconds per 16 batches. 0.477 GB ram.
+3.30 seconds with 5 workers. 0.21 seconds per 16 batches. 0.604 GB ram.
+2.82 seconds with 6 workers. 0.18 seconds per 16 batches. 0.718 GB ram.
+2.83 seconds with 7 workers. 0.18 seconds per 16 batches. 0.820 GB ram.
+2.52 seconds with 8 workers. 0.16 seconds per 16 batches. 0.952 GB ram.
 
+LiveClassifyDataset - background
+11.50 seconds with 0 workers. 0.72 seconds per 16 batches. 0.007 GB ram.
+12.59 seconds with 1 workers. 0.79 seconds per 16 batches. 0.326 GB ram.
+7.95 seconds with 2 workers. 0.50 seconds per 16 batches. 0.643 GB ram.
+7.72 seconds with 3 workers. 0.48 seconds per 16 batches. 0.968 GB ram.
+7.40 seconds with 4 workers. 0.46 seconds per 16 batches. 1.291 GB ram.
+8.31 seconds with 5 workers. 0.52 seconds per 16 batches. 1.607 GB ram.
+8.78 seconds with 6 workers. 0.55 seconds per 16 batches. 1.922 GB ram.
+9.79 seconds with 7 workers. 0.61 seconds per 16 batches. 2.226 GB ram.
+10.45 seconds with 8 workers. 0.65 seconds per 16 batches. 2.528 GB ram.
+
+FolderClassifyDataset
+30.81 seconds with 0 workers. 0.96 seconds per 32 batches. 0.072 GB ram.
+9.87 seconds with 1 workers. 0.31 seconds per 32 batches. 0.139 GB ram.
+6.34 seconds with 2 workers. 0.20 seconds per 32 batches. 0.267 GB ram.
+5.99 seconds with 3 workers. 0.19 seconds per 32 batches. 0.397 GB ram.
+6.07 seconds with 4 workers. 0.19 seconds per 32 batches. 0.524 GB ram.
+6.67 seconds with 5 workers. 0.21 seconds per 32 batches. 0.647 GB ram.
+7.42 seconds with 6 workers. 0.23 seconds per 32 batches. 0.808 GB ram.
+8.24 seconds with 7 workers. 0.26 seconds per 32 batches. 1.113 GB ram.
+8.86 seconds with 8 workers. 0.28 seconds per 32 batches. 1.003 GB ram.
 
 # bad, GPU to CPU is slow
 .cpu()

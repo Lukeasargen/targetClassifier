@@ -28,11 +28,12 @@ def rotate_2d(vector, angle, degrees = False):
 
 
 class TargetGenerator():
-    def __init__(self, img_size, target_size, scale=(1.0, 1.0), rotation=False,
-            target_transforms=None, bkg_path=None):
+    def __init__(self, input_size, target_size, expansion_factor=1, scale=(1.0, 1.0),
+            rotation=False, target_transforms=None, bkg_path=None):
         """ For argument definitions, see the draw_targets() description """
-        self.img_size = img_size
+        self.input_size = input_size
         self.target_size = target_size
+        self.expansion_factor = expansion_factor
         self.scale = scale
         self.rotation = rotation
         self.target_transforms = target_transforms
@@ -117,7 +118,7 @@ class TargetGenerator():
             points.append( (radius*np.sin((step*i) + np.radians(angle))) + center[1] )
         return points
 
-    def draw_shape(self, draw, img_size, target_size, shape_idx, color,
+    def draw_shape(self, draw, input_size, target_size, shape_idx, color,
             scale=(1.0, 1.0), rotation=False):
         """ Do not use. this is called within draw_target.
             This function draws the specified shape, color, scale, and rotation.
@@ -126,7 +127,7 @@ class TargetGenerator():
         shape = self.shape_options[shape_idx]
         r = (np.random.uniform(*scale)*target_size) // 2  # half width of target
         # Random center
-        cx, cy = np.random.randint(r, img_size-r), np.random.randint(r, img_size-r)
+        cx, cy = np.random.randint(r, input_size-r), np.random.randint(r, input_size-r)
         angle = 0
         if rotation:
             angle = np.random.uniform(0, 360)
@@ -252,11 +253,11 @@ class TargetGenerator():
         img = img.rotate(angle, expand=1)
         return img
 
-    def draw_target(self, img_size=None, target_size=None, scale=None, rotation=None,
+    def draw_target(self, input_size=None, target_size=None, scale=None, rotation=None,
             target_transforms=None, bkg_path=None):
         """ Draws a random target on a transparent PIL image. Also returns the correct labels.
             
-            img_size:
+            input_size:
                 square size in pixels
             target_size:
                 maximum diameter of circle that the target could fit inside
@@ -271,8 +272,8 @@ class TargetGenerator():
                 if not None, then a target with transparent background is returned. else, a random
                 color is selected that is different from the shape and letter color
         """
-        if not img_size:
-            img_size = self.img_size
+        if not input_size:
+            input_size = self.input_size
         if not target_size:
             target_size = self.target_size
         if not scale:
@@ -288,12 +289,12 @@ class TargetGenerator():
         letter_idx = np.random.randint(0, len(self.letter_options))
 
         # Create a tranparent image to overlay on background images
-        target = Image.new('RGBA', size=(img_size, img_size), color=(0, 0, 0, 0))
+        target = Image.new('RGBA', size=(input_size*self.expansion_factor, input_size*self.expansion_factor), color=(0, 0, 0, 0))
         draw = ImageDraw.Draw(target)
 
         # Render the target from the label choices
         shape_color = self.color_to_hsv(self.color_options[shape_color_idx])
-        (cx, cy), l, angle = self.draw_shape(draw, img_size, target_size, shape_idx, shape_color,
+        (cx, cy), l, angle = self.draw_shape(draw, input_size*self.expansion_factor, target_size*self.expansion_factor, shape_idx, shape_color,
             scale=scale, rotation=rotation)
         letter_angle_offset = 0
         orientation = (angle + np.random.uniform(-letter_angle_offset, letter_angle_offset)) % 360
@@ -307,7 +308,7 @@ class TargetGenerator():
 
         if not bkg_path:
             bkg_color = self.color_to_hsv(self.color_options[bkg_color_idx])
-            img = Image.new('RGB', size=(img_size, img_size), color=bkg_color)
+            img = Image.new('RGB', size=(input_size*self.expansion_factor, input_size*self.expansion_factor), color=bkg_color)
             img.paste(target, None, target)  # Alpha channel is the mask
         else:
             img = target  # return the target with transparency
@@ -336,22 +337,24 @@ class TargetGenerator():
             self.bkg_count = 0
         return self.backgrounds[self.bkg_choices[self.bkg_count]]            
 
-    def gen_classify(self, img_size=None, target_size=None, scale=None, rotation=None,
+    def gen_classify(self, input_size=None, target_size=None, scale=None, rotation=None,
             target_transforms=None, bkg_path=None):
         """ Generate a cropped target with it's classification label.
             For argument explainations see the draw_targets() description."""
-        if not img_size:
-            img_size = self.img_size
+        if not input_size:
+            input_size = self.input_size
         if not bkg_path:
             bkg_path = self.bkg_path
-        target, label = self.draw_target(img_size=None, target_size=None, scale=None,
+        target, label = self.draw_target(input_size=None, target_size=None, scale=None,
                             rotation=None, target_transforms=None, bkg_path=bkg_path)
         if bkg_path:
             bkg = self.get_background()
-            img = T.RandomResizedCrop(img_size, scale=(0.08, 1.0), ratio=(3./4., 4./3.), interpolation=Image.NEAREST)(bkg)
+            img = T.RandomResizedCrop(input_size*self.expansion_factor, scale=(0.08, 1.0), ratio=(3./4., 4./3.), interpolation=Image.NEAREST)(bkg)
             img.paste(target, None, target)  # Alpha channel is the mask
         else:
             img = target.convert("RGB")  # return the target
+
+        img = img.resize((input_size, input_size))
         return img, label
 
     def gen_segment(self):
@@ -383,9 +386,9 @@ def visualize_classify(gen):
 if __name__ == "__main__":
 
     bkg_path = None  # path to background images
-    img_size = 32
+    input_size = 32
     target_size = 30
-    scale = (0.7, 1.0)
+    scale = (0.8, 1.0)
     rotation = True
     expansion_factor = 3  # generate higher resolution targets and downscale, improves aliasing effects
 
@@ -395,7 +398,7 @@ if __name__ == "__main__":
 
     # create the generator object
     # this can be used for classification and segmentation generation
-    gen = TargetGenerator(img_size=expansion_factor*img_size, target_size=expansion_factor*target_size,
+    gen = TargetGenerator(input_size=input_size, target_size=target_size, expansion_factor=expansion_factor,
         scale=scale, rotation=rotation, target_transforms=target_tranforms, bkg_path=bkg_path)
     
     # x, y = gen.gen_classify()

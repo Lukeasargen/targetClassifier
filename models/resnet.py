@@ -71,6 +71,8 @@ class BasicResnet(nn.Module):
         assert (len(filters)-1)==len(blocks), "filters and blocks length do not match."
         self.num_blocks = len(blocks)
         
+        self.normalize = nn.BatchNorm2d(in_channels)  # Layer will be frozen without learnable parameters
+
         first_modules = [
             nn.Conv2d(in_channels=in_channels, out_channels=filters[0],
             kernel_size=(5, 5), stride=1, padding=2, bias=False),
@@ -106,6 +108,8 @@ class BasicResnet(nn.Module):
             elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
+        
+        self.set_normalization()  # Freezes first layer, set to identity function
     
     def _create_block(self, in_channels, out_channels, stride, n, bottleneck, groups, width_per_group):
         layers = []
@@ -116,8 +120,19 @@ class BasicResnet(nn.Module):
                 layers.append(ResidualBlock(out_channels, out_channels, 1, bottleneck, groups, width_per_group))
         return nn.Sequential(*layers)
 
+    def set_normalization(self, mean=[0.0, 0.0, 0.0], std=[1.0, 1.0, 1.0]):
+        self.normalize.reset_parameters()
+        self.normalize.eval()
+        self.normalize.running_mean = torch.tensor(mean, requires_grad=False)
+        self.normalize.running_var = torch.tensor([x**2 for x in std], requires_grad=False)
+        self.normalize.weight.requires_grad = False  # gamma
+        self.normalize.bias.requires_grad = False   # beta
+        self.normalize.running_mean.requires_grad = False  # mean
+        self.normalize.running_var.requires_grad = False  # variance
+
     def forward(self, x, dropout=0.0):
-        out = self.first_layer(x)
+        out = self.normalize(x)
+        out = self.first_layer(out)
         for idx in range(self.num_blocks):
             out = eval("self.Block" + str(idx))(out)
             out = F.dropout(out, p=dropout)
@@ -197,5 +212,11 @@ if __name__ == "__main__":
     model = BasicResnet(in_channels, out_features, avgpool_size, filters, blocks,
             bottleneck, groups, width_per_group, max_pool, last_conv)
 
-    # print(model)
+    model.set_normalization(mean=[0.5, 0.4, 0.3], std=[0.1, 0.2, 0.3])
+
+    x = torch.ones((1, in_channels, input_size, input_size)).to(device)
+    model = model.to(device)
+
+    y = model(x)
+
     summary(model.to(device), (in_channels, input_size, input_size))

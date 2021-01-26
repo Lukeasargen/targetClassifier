@@ -1,4 +1,5 @@
 import copy
+import json
 import os  # Get files
 import time  # Time training
 
@@ -85,12 +86,12 @@ if __name__ == "__main__" and '__file__' in globals():
     dropout = 0.0
     # num_classes is defined by the dataset
     # Training Hyperparameters
-    num_epochs = 40
-    validate = False
-    batch_size = 256
+    num_epochs = 20
+    validate = True
+    val_batch_size=batch_size = 256
     train_size = 16384
     val_size = 2048
-    num_workers = 8
+    num_workers = 4
     shuffle = False
     drop_last = True
     base_lr = 1e-1
@@ -109,25 +110,20 @@ if __name__ == "__main__" and '__file__' in globals():
     show_graph = True  # use plt to graph, acc and loss
     scalar_threshold = 45/360  # scalar magnitude of difference to be correct
     # Dataset config
-    dataset_folder = None  # root directory that has images and labels.csv, if None targets are made during the training
-    val_split = 0.2  # percentage of dataset used for validation
+    dataset_folder = 'images/classify0'  # root directory that has images and labels.csv, if None targets are made during the training
+    val_split = 0.1  # percentage of dataset used for validation
     bkg_path = None  # path to background images, None is a random color background
     target_size = 30
-    scale = (0.7, 1.0)
+    scale = (0.8, 1.0)
     rotation = True
     expansion_factor = 3  # generate higher resolution targets and downscale, improves aliasing effects
-    target_tranforms = T.Compose([
-        T.RandomPerspective(distortion_scale=0.5, p=1.0, interpolation=Image.BICUBIC),
+    target_transforms = T.Compose([
+        T.RandomPerspective(distortion_scale=0.4, p=1.0, interpolation=Image.BICUBIC),
     ])
 
-
-    # synthetic
-    set_mean = [0.545, 0.432, 0.382]
-    set_std = [0.151, 0.147, 0.166]
-
-    # backgrounds
-    # set_mean = [0.456, 0.494, 0.259]
-    # set_std = [0.153, 0.135, 0.150]
+    # If a folder is given, the statistics will be loaded from there
+    set_mean = [0.456, 0.494, 0.259]
+    set_std = [0.153, 0.135, 0.150]
 
     save_path = lambda r : 'runs/run{:04d}_best_loss.pth'.format(r)
 
@@ -142,42 +138,62 @@ if __name__ == "__main__" and '__file__' in globals():
         CustomTransformation(),
         T.Resize((input_size)),  # Make shortest edge this size
         T.ToTensor(),
-        T.Normalize(mean=set_mean, std=set_std)
     ])
     val_transforms = T.Compose([
         T.Resize((input_size)),  # Make shortest edge this size
         T.CenterCrop(input_size),
         T.ToTensor(),
-        T.Normalize(mean=set_mean, std=set_std)
     ])
 
     if dataset_folder:
-        # TODO
-        # load data
-        # split
-        # make datasets
-        pass
+        full_set = FolderClassifyDataset(folder=dataset_folder, transforms=train_transforms)
+        val_size = int(len(full_set)*val_split)
+        if validate:
+            if val_size < batch_size:
+                val_batch_size = val_size
+                print("Validate set is smaller than batch size. val_batch_size is reduced to", val_batch_size)
+            print("Dataset Split. {}% for validation.".format(100*val_split))
+            print("train_size :", len(full_set)-val_size)
+            print("val_size :", val_size)
+            train_dataset, val_dataset = torch.utils.data.random_split(full_set, [len(full_set)-val_size, val_size])
+        else:
+            train_dataset = full_set
+        set_info = json.load(open(dataset_folder+"/set_info.json"))
+        print("Loaded mean and std from folder.")
+        set_mean = set_info["mean"]
+        set_std = set_info["std"]
     else:
-        train_dataset = LiveClassifyDataset(length=train_size, input_size=expansion_factor*input_size,
-            target_size=expansion_factor*target_size, scale=scale, rotation=rotation, bkg_path=bkg_path,
-            target_transforms=target_tranforms, transforms=train_transforms)
-        val_dataset = LiveClassifyDataset(length=val_size, input_size=expansion_factor*input_size,
-            target_size=expansion_factor*target_size, scale=scale, rotation=rotation, bkg_path=bkg_path,
-            target_transforms=target_tranforms, transforms=val_transforms)
+        train_dataset = LiveClassifyDataset(length=train_size, input_size=input_size, target_size=target_size,
+            expansion_factor=expansion_factor, scale=scale, rotation=rotation, bkg_path=bkg_path,
+            target_transforms=target_transforms, transforms=train_transforms)
+        if validate:
+            val_dataset = LiveClassifyDataset(length=val_size, input_size=input_size, target_size=target_size,
+                expansion_factor=expansion_factor, scale=scale, rotation=rotation, bkg_path=bkg_path,
+                target_transforms=target_transforms, transforms=val_transforms)
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size ,shuffle=shuffle,
             num_workers=num_workers, drop_last=drop_last)
-    val_loader = DataLoader(dataset=val_dataset, batch_size=batch_size,
-            num_workers=num_workers, drop_last=drop_last)
+    if validate:
+        val_loader = DataLoader(dataset=val_dataset, batch_size=val_batch_size,
+                num_workers=num_workers, drop_last=drop_last)
 
-    num_classes = val_dataset.gen.num_classes
+    if dataset_folder:
+        num_classes = set_info["num_classes"]
+    else:
+        num_classes = val_dataset.gen.num_classes
     print("num_classes :", num_classes)
+
+    print("mean :", set_mean)
+    print("std :", set_std)
 
     # Check for cuda
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print('device :', device)
     model = BuildMultiTaskResnet(backbone_features, num_classes, in_channels, avgpool_size,
-                filters, blocks, bottleneck, groups, width_per_group, max_pool).to(device)
+                filters, blocks, bottleneck, groups, width_per_group, max_pool)
+    model.set_normalization(mean=set_mean, std=set_std)
+    model = model.to(device)
+
 
     """ https://github.com/pytorch/pytorch/issues/520#issuecomment-277741834
     training fp16 batchnorm only leads to a 0.5% decrease in accuracy
@@ -403,7 +419,7 @@ if __name__ == "__main__" and '__file__' in globals():
 
     print("Best Loss Epoch {} : {:.4f}".format(best_loss_epoch, best_loss))
 
-    save_multitask_resnet(best_model, save_path(current_run), input_size, set_mean, set_std)
+    save_multitask_resnet(best_model, save_path(current_run), input_size)
 
     if show_graph:
 

@@ -18,7 +18,39 @@ class RandomGaussianBlur(torch.nn.Module):
 
     def forward(self, img):
         if np.random.uniform() < self.p:
-            img = img.filter(ImageFilter.GaussianBlur(radius=max(np.random.normal(loc=0.3, scale=0.2), 0.0)))
+            img = img.filter(ImageFilter.GaussianBlur(radius=max(np.random.normal(loc=0.0, scale=0.1), 0.0)))
+        return img
+
+
+class RandomGamma(torch.nn.Module):
+    def __init__(self, p=0.0):
+        super().__init__()
+        self.p = float(numpy.clip(p, 0.0, 1.0))
+
+    def forward(self, img):
+        if np.random.uniform() < self.p:
+            img = TF.adjust_gamma(img, gamma=np.random.normal(loc=1.0, scale=0.03))
+        return img
+
+
+class RandomBrightness(torch.nn.Module):
+    def __init__(self, p=0.0):
+        super().__init__()
+        self.p = float(numpy.clip(p, 0.0, 1.0))
+
+    def forward(self, img):
+        if np.random.uniform() < self.p:
+            img = TF.adjust_brightness(img, brightness_factor=np.random.normal(loc=1.0, scale=0.01))
+        return img
+
+class RandomSharpness(torch.nn.Module):
+    def __init__(self, p=0.0):
+        super().__init__()
+        self.p = float(numpy.clip(p, 0.0, 1.0))
+
+    def forward(self, img):
+        if np.random.uniform() < self.p:
+            img = img.filter(ImageFilter.UnsharpMask(radius=max(np.random.normal(loc=0.0, scale=0.03), 0.0)))
         return img
 
 
@@ -29,11 +61,11 @@ class CustomTransformation(torch.nn.Module):
     def forward(self, img):
         c = np.random.uniform(size=4) # slightly faster to random sample 4 at once
         if c[0] < 0.5:
-            img = img.filter(ImageFilter.GaussianBlur(radius=max(np.random.normal(loc=0.3, scale=0.2), 0.0)))
+            img = img.filter(ImageFilter.GaussianBlur(radius=max(np.random.normal(loc=0.0, scale=0.1), 0.0)))
         if c[1] < 0.5:
-            img = TF.adjust_gamma(img, gamma=max(np.random.normal(loc=1.0, scale=0.15), 0.5))
+            img = TF.adjust_gamma(img, gamma=np.random.normal(loc=1.0, scale=0.03))
         if c[2] < 0.5:
-            img = TF.adjust_brightness(img, brightness_factor=max(np.random.normal(loc=1.0, scale=0.2), 0.3))
+            img = TF.adjust_brightness(img, brightness_factor=np.random.normal(loc=1.0, scale=0.01))
         if c[3] < 0.1:
-            img = img.filter(ImageFilter.UnsharpMask(radius=max(np.random.normal(loc=1.0, scale=0.25), 0.0)))
+            img = img.filter(ImageFilter.UnsharpMask(radius=max(np.random.normal(loc=0.0, scale=0.03), 0.0)))
         return img

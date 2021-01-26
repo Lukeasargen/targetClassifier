@@ -13,13 +13,11 @@ else:
     from .resnet import BasicResnet
 
 
-def save_multitask_resnet(model, save_path, input_size, mean, std):
+def save_multitask_resnet(model, save_path, input_size):
     data = {
         'model': model.state_dict(),
         'model_args': model.model_args,
         'input_size': input_size,
-        'mean': mean,
-        'std': std
     }
     torch.save(data, save_path)
 
@@ -27,7 +25,7 @@ def load_multitask_resnet(path, device='cpu'):
     data = torch.load(path, map_location=torch.device(device))
     model = BuildMultiTaskResnet(**data['model_args']).to(device)
     model.load_state_dict(data['model'])
-    return model, data['input_size'], data['mean'], data['std']
+    return model, data['input_size']
 
 
 class MultiTaskNet(nn.Module):
@@ -52,6 +50,9 @@ class MultiTaskNet(nn.Module):
             ('flatten', nn.Flatten())
         ]))
         return head
+
+    def set_normalization(self, mean=[0.0, 0.0, 0.0], std=[1.0, 1.0, 1.0]):
+        self.basemodel.set_normalization(mean, std)
 
     def forward(self, x, dropout=0.0):
         x = self.basemodel.forward(x, dropout)
@@ -104,7 +105,7 @@ def test_save_load(model, input_size, in_channels):
     path = save_path(0)
     save_multitask_resnet(model, path, input_size, set_mean, set_std)
     # load model
-    m2, in2, mean, std = load_multitask_resnet(path, device)
+    m2, in2 = load_multitask_resnet(path, device)
     print(in2)
     print(mean)
     print(std)
@@ -155,9 +156,12 @@ if __name__ == "__main__":
 
     model = BuildMultiTaskResnet(backbone_features, num_classes, in_channels, avgpool_size,
                 filters, blocks, bottleneck, groups, width_per_group, max_pool)
+
+    model.set_normalization(mean=[0.5, 0.4, 0.3], std=[0.1, 0.2, 0.3])
+
     # print(model)
-    summary(model.to(device), (in_channels, input_size, input_size))
+    # summary(model.to(device), (in_channels, input_size, input_size))
 
     # test_train_loop(model, num_classes, input_size, in_channels, device)
 
-    # test_save_load(model, input_size, in_channels)
+    test_save_load(model, input_size, in_channels)

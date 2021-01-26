@@ -4,10 +4,14 @@ import os
 
 
 class Logger():
-    def __init__(self, name, headers):
+    def __init__(self, name, headers, date=True, folder="runs"):
         self.name = name
         self.headers = headers
-        self.path = "runs/" + name + datetime.datetime.now().strftime("_%Y%m%d_%H%M%S") + ".csv"
+        if date:
+            self.path = folder + "/" + name + datetime.datetime.now().strftime("_%Y%m%d_%H%M%S") + ".csv"    
+        else:
+            self.path = folder + "/" + name + ".csv"
+
         if not os.path.exists(self.path):
             with open(self.path, 'a+', newline='') as f:
                 writer = csv.writer(f, delimiter=',')

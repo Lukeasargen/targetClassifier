@@ -2,7 +2,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-mu, sigma = 0.4, 0.5 # mean and standard deviation
+mu = 0.0  # mean
+sigma = 0.03 # standard deviation
 s = np.random.normal(mu, sigma, 1000)
 
 s = s[s >= 0]  # min threshold values
