@@ -4,7 +4,7 @@ import os
 
 
 class Logger():
-    def __init__(self, name, headers, date=True, folder="runs"):
+    def __init__(self, name, headers, date=False, folder="runs"):
         self.name = name
         self.headers = headers
         if date:

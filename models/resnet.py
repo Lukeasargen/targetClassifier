@@ -6,6 +6,21 @@ import torch.nn.functional as F
 from torchsummary import summary
 
 
+def save_resnet(model, save_path):
+    data = {
+        'model': model.state_dict(),
+        'model_args': model.model_args,
+    }
+    torch.save(data, save_path)
+
+
+def load_resnet(path, device):
+    data = torch.load(path, map_location=torch.device(device))
+    model = BasicResnet(**data['model_args']).to(device)
+    model.load_state_dict(data['model'])
+    return model
+
+
 class ResidualBlock(nn.Module):
     def __init__(self, in_channels, out_channels, stride=1,
             bottleneck=False, groups=1, width_per_group=None):
@@ -23,11 +38,11 @@ class ResidualBlock(nn.Module):
                 ('conv1', nn.Conv2d(in_channels=in_channels, out_channels=downscale_filters,
                     kernel_size=(1, 1), stride=1, padding=0, bias=False)),
                 ('bn1', nn.BatchNorm2d(downscale_filters)),
-                ('relu', nn.ReLU(inplace=True)),
+                ('relu', nn.LeakyReLU(negative_slope=0.2, inplace=True)),
                 ('conv2', nn.Conv2d(in_channels=downscale_filters, out_channels=downscale_filters,
                     kernel_size=(3, 3), stride=stride, padding=1, groups=groups, bias=False)),
                 ('bn2', nn.BatchNorm2d(downscale_filters)),
-                ('relu', nn.ReLU(inplace=True)),
+                ('relu', nn.LeakyReLU(negative_slope=0.2, inplace=True)),
                 ('conv3', nn.Conv2d(in_channels=downscale_filters, out_channels=out_channels,
                     kernel_size=(1, 1), stride=1, padding=0, bias=False)),
                 ('bn3', nn.BatchNorm2d(out_channels)),
@@ -37,7 +52,7 @@ class ResidualBlock(nn.Module):
                 ('conv1', nn.Conv2d(in_channels=in_channels, out_channels=out_channels,
                     kernel_size=(3, 3), stride=stride, padding=1, bias=False)),
                 ('bn1', nn.BatchNorm2d(out_channels)),
-                ('relu', nn.ReLU(inplace=True)),
+                ('relu', nn.LeakyReLU(negative_slope=0.2, inplace=True)),
                 ('conv2', nn.Conv2d(in_channels=out_channels, out_channels=out_channels,
                     kernel_size=(3, 3), stride=1, padding=1, bias=False)),
                 ('bn2', nn.BatchNorm2d(out_channels)),
@@ -54,7 +69,7 @@ class ResidualBlock(nn.Module):
                     kernel_size=(1, 1), stride=stride, bias=False),
                 nn.BatchNorm2d(out_channels)
             )
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
 
     def forward(self, x):
         out = self.block(x)
@@ -64,12 +79,20 @@ class ResidualBlock(nn.Module):
 
 
 class BasicResnet(nn.Module):
-    def __init__(self, in_channels, out_features, avgpool_size=None,
+    def __init__(self, in_channels, num_classes=1000, avgpool_size=None,
             filters=[64, 64, 128, 256, 512], blocks=[2, 2, 2, 2], bottleneck=False,
-            groups=1, width_per_group=None, max_pool=False, last_conv=False):
+            groups=1, width_per_group=None, last_conv=False):
         super(BasicResnet, self).__init__()
         assert (len(filters)-1)==len(blocks), "filters and blocks length do not match."
         self.num_blocks = len(blocks)
+
+        self.model_args = {
+            "in_channels": in_channels, "num_classes": num_classes,
+            "avgpool_size": avgpool_size, "filters": filters,
+            "blocks": blocks, "bottleneck": bottleneck, 
+            "groups": groups, "width_per_group": width_per_group,
+            "last_conv": last_conv
+        }
         
         self.normalize = nn.BatchNorm2d(in_channels)  # Layer will be frozen without learnable parameters
 
@@ -77,10 +100,8 @@ class BasicResnet(nn.Module):
             nn.Conv2d(in_channels=in_channels, out_channels=filters[0],
             kernel_size=(5, 5), stride=1, padding=2, bias=False),
             nn.BatchNorm2d(filters[0]),
-            nn.ReLU(inplace=True)
+            nn.LeakyReLU(negative_slope=0.2, inplace=True)
         ]
-        if max_pool:
-            first_modules.append(nn.MaxPool2d(kernel_size=3, stride=2, padding=1))
         self.first_layer = nn.Sequential(*first_modules)
 
         for idx, num in enumerate(blocks):
@@ -91,12 +112,12 @@ class BasicResnet(nn.Module):
         # Remove last conv because each classifier head gets the averaged feature maps as input
         # Set last_conv=True to get a basic linear classifier
         last_modules = []
-        if avgpool_size == None: # 
+        if avgpool_size == None:
             last_modules.append(nn.AdaptiveAvgPool2d((1, 1)))
         else:
             last_modules.append(nn.AvgPool2d(avgpool_size))
         if last_conv:
-            last_modules.append(nn.Conv2d(in_channels=filters[-1], out_channels=out_features,
+            last_modules.append(nn.Conv2d(in_channels=filters[-1], out_channels=num_classes,
                                 kernel_size=(1, 1), stride=1, padding=0, bias=True))
             last_modules.append(nn.Flatten())
         self.last_layer = nn.Sequential(*last_modules)
@@ -122,13 +143,13 @@ class BasicResnet(nn.Module):
 
     def set_normalization(self, mean=[0.0, 0.0, 0.0], std=[1.0, 1.0, 1.0]):
         self.normalize.reset_parameters()
-        self.normalize.eval()
         self.normalize.running_mean = torch.tensor(mean, requires_grad=False)
         self.normalize.running_var = torch.tensor([x**2 for x in std], requires_grad=False)
         self.normalize.weight.requires_grad = False  # gamma
         self.normalize.bias.requires_grad = False   # beta
         self.normalize.running_mean.requires_grad = False  # mean
         self.normalize.running_var.requires_grad = False  # variance
+        self.normalize.eval()
 
     def forward(self, x, dropout=0.0):
         out = self.normalize(x)
@@ -141,56 +162,93 @@ class BasicResnet(nn.Module):
 
 
 def resnet18(num_classes=1000):
-    return BasicResnet(in_channels=3, out_features=num_classes, avgpool_size=7,
+    return BasicResnet(in_channels=3, num_classes=num_classes,
             filters=[64, 64, 128, 256, 512], blocks=[2, 2, 2, 2],
-            max_pool=True, last_conv=True)
+            last_conv=True)
 
 def resnet34(num_classes=1000):
-    return BasicResnet(in_channels=3, out_features=num_classes, avgpool_size=7,
+    return BasicResnet(in_channels=3, num_classes=num_classes,
             filters=[64, 64, 128, 256, 512], blocks=[3, 4, 6, 3],
-            max_pool=True, last_conv=True)
+            last_conv=True)
 
 def resnet50(num_classes=1000):
-    return BasicResnet(in_channels=3, out_features=num_classes, avgpool_size=7,
+    return BasicResnet(in_channels=3, num_classes=num_classes,
             filters=[64, 256, 512, 1024, 2048], blocks=[3, 4, 6, 3],
             bottleneck=True,
-            max_pool=True, last_conv=True)
+            last_conv=True)
 
 def resnet101(num_classes=1000):
-    return BasicResnet(in_channels=3, out_features=num_classes, avgpool_size=7,
+    return BasicResnet(in_channels=3, num_classes=num_classes,
             filters=[64, 256, 512, 1024, 2048], blocks=[3, 4, 23, 3],
             bottleneck=True,
-            max_pool=True, last_conv=True)
+            last_conv=True)
 
 def resnet152(num_classes=1000):
-    return BasicResnet(in_channels=3, out_features=num_classes, avgpool_size=7,
+    return BasicResnet(in_channels=3, num_classes=num_classes,
             filters=[64, 256, 512, 1024, 2048], blocks=[3, 8, 36, 3],
             bottleneck=True,
-            max_pool=True, last_conv=True)
+            last_conv=True)
 
 def resnext50_32x4d(num_classes=1000):
-    return BasicResnet(in_channels=3, out_features=num_classes, avgpool_size=7,
+    return BasicResnet(in_channels=3, num_classes=num_classes,
             filters=[64, 256, 512, 1024, 2048], blocks=[3, 4, 6, 3],
             bottleneck=True, groups=32, width_per_group=4,
-            max_pool=True, last_conv=True)
+            last_conv=True)
 
 def resnext101_32x8d(num_classes=1000):
-    return BasicResnet(in_channels=3, out_features=num_classes, avgpool_size=7,
+    return BasicResnet(in_channels=3, num_classes=num_classes,
             filters=[64, 256, 512, 1024, 2048], blocks=[3, 4, 23, 3],
             bottleneck=True, groups=32, width_per_group=8,
-            max_pool=True, last_conv=True)
+            last_conv=True)
 
 def wide_resnet50_2(num_classes=1000):
-    return BasicResnet(in_channels=3, out_features=num_classes, avgpool_size=7,
+    return BasicResnet(in_channels=3, num_classes=num_classes,
             filters=[64, 256, 512, 1024, 2048], blocks=[3, 4, 6, 3],
             bottleneck=True, groups=1, width_per_group=128,
-            max_pool=True, last_conv=True)
+            last_conv=True)
 
 def wide_resnet101_2(num_classes=1000):
-    return BasicResnet(in_channels=3, out_features=num_classes, avgpool_size=7,
+    return BasicResnet(in_channels=3, num_classes=num_classes,
             filters=[64, 256, 512, 1024, 2048], blocks=[3, 4, 23, 3],
             bottleneck=True, groups=1, width_per_group=128,
-            max_pool=True, last_conv=True)
+            last_conv=True)
+
+def wide_resnet(num_classes=1000, l=2, k=8):
+    return BasicResnet(in_channels=3, num_classes=num_classes,
+            filters=[16, 16*k, 32*k, 64*k], blocks=[l, l, l],
+            last_conv=True)
+
+def wide_resnet16_8(num_classes=1000):
+    return wide_resnet(num_classes, l=2, k=8)
+
+
+def count_convs(module):
+    c = 0
+    if isinstance(module, nn.modules.conv._ConvNd):
+        c +=1
+    for child in module.children():
+        c += count_convs(child)
+    return c
+
+def test_save_load(device):
+
+    in_channels = 3
+    input_size = 224
+    
+    x = torch.ones((1, in_channels, input_size, input_size)).to(device)
+
+    m1 = resnet18(num_classes=6)
+    m1.set_normalization(mean=[0.5, 0.4, 0.3], std=[0.1, 0.2, 0.3])
+    m1.to(device)
+    y1 = m1(x)
+    print(y1, y1.size())
+
+    path = 'runs/res_test.pth'
+    save_resnet(m1, save_path=path)
+
+    m2 = load_resnet(path, device)
+    y2 = m2(x)
+    print(y2, y2.size())
 
 
 if __name__ == "__main__":
@@ -199,24 +257,26 @@ if __name__ == "__main__":
 
     input_size = 32
     in_channels = 3
-    out_features = 34
+    num_classes = 1000
     avgpool_size = None  # input_size/( + 2*(num_blocks - 1 + first_conv stride)
     filters = [16, 16, 32, 64]
     blocks = [2, 2, 2]
     bottleneck = False
     groups = 1
     width_per_group = None
-    max_pool = False  # divide avgpool_size by 2
     last_conv = True
 
-    model = BasicResnet(in_channels, out_features, avgpool_size, filters, blocks,
-            bottleneck, groups, width_per_group, max_pool, last_conv)
+    # model = BasicResnet(in_channels, num_classes, avgpool_size, filters, blocks,
+    #         bottleneck, groups, width_per_group, last_conv)
 
+    model = wide_resnet16_8(num_classes=10)
     model.set_normalization(mean=[0.5, 0.4, 0.3], std=[0.1, 0.2, 0.3])
-
-    x = torch.ones((1, in_channels, input_size, input_size)).to(device)
     model = model.to(device)
 
-    y = model(x)
+    # x = torch.ones((1, in_channels, input_size, input_size)).to(device)
+    # y = model(x)
+    summary(model, (in_channels, input_size, input_size))
 
-    summary(model.to(device), (in_channels, input_size, input_size))
+    # print("Convolutional Layers:", count_convs(model))
+
+    # test_save_load(device)

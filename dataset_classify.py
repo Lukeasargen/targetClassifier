@@ -21,12 +21,13 @@ os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 
 class LiveClassifyDataset(Dataset):
-    def __init__(self, length, input_size, target_size, expansion_factor=1, scale=(1.0, 1.0), rotation=False, bkg_path=None,
-            target_transforms=None, transforms=None):
+    def __init__(self, length, input_size, target_size, tasks_names=None, expansion_factor=1, scale=(1.0, 1.0), rotation=False,
+            bkg_path=None, target_transforms=None, transforms=None):
         """ Dataset that makes generator object and calls it in __getitem__ """
         self.length = length
         self.input_size = input_size
         self.target_size = target_size
+        self.tasks_names = tasks_names
         self.expansion_factor = expansion_factor
         self.scale = scale
         self.rotation = rotation
@@ -42,17 +43,22 @@ class LiveClassifyDataset(Dataset):
 
     def __getitem__(self, idx):
         img, y = self.gen.gen_classify()
-        return self.transforms(img), torch.tensor(list(y.values()), dtype=torch.float).squeeze()
+        if self.tasks_names == None:  # get all
+            target = list(y.values())
+        else:
+            target = [y.get(key) for key in self.tasks_names]
+        return self.transforms(img), torch.tensor(target, dtype=torch.float).squeeze()
 
 
 class FolderClassifyDataset(Dataset):
-    def __init__(self, folder, transforms):
+    def __init__(self, folder, tasks_names=None, transforms=None):
         """ Dataset from a folder at root.
             This corresponds to the output from save_classify()."""
         self.transforms = T.Compose([T.ToTensor()])
         if transforms:
             self.transforms = transforms
         self.folder = folder
+        self.tasks_names = tasks_names
         self.metadata = pd.read_csv(os.path.join(self.folder, "labels.csv"))
         self.length = len(self.metadata)
 
@@ -61,9 +67,12 @@ class FolderClassifyDataset(Dataset):
 
     def __getitem__(self, idx):
         img_name = self.metadata.iloc[idx, 0]  # 0=path
-        label = list(self.metadata.iloc[idx, 1:])  # 1:=label
+        if self.tasks_names == None:  # get all
+            target = list(self.metadata.iloc[idx, 1:])  # 1:=label
+        else:
+            target = list(self.metadata.iloc[idx][self.tasks_names])
         img = pil_loader(os.path.join(self.folder, img_name))
-        return self.transforms(img), torch.tensor((label), dtype=torch.float).squeeze()
+        return self.transforms(img), torch.tensor((target), dtype=torch.float).squeeze()
 
 
 def visualize_dataloader(dataloader):
@@ -105,7 +114,8 @@ def visualize_labels(dataloader):
         for j in range(width):
             img = images[idx]
             axarr[i][j].imshow(np.array(img).transpose((1,2,0)))
-            axarr[i][j].text(32, 20, fl(labels[idx]), style='italic',
+            ins = dataloader.dataset.input_size
+            axarr[i][j].text(ins//1, ins//2, fl(labels[idx]), style='italic',
                 bbox={'facecolor': 'grey', 'alpha': 1.0}, fontsize=8)
             idx +=1
     fig.savefig('images/classify_labels.png', bbox_inches='tight')
@@ -130,6 +140,7 @@ def dataset_stats(dataset, num=1000):
             print("{}/{} measured. Total time={:.2f}s. Images per second {:.2f}.".format(i+1, n, t2-t0, 100/(t2-t1)))
             t1 = t2
     print("mean :", mean/n)
+    print("var :", var/n)
     print("std :", np.sqrt(var/n))
 
 
@@ -200,8 +211,10 @@ def save_classify(name, num, input_size, target_size, expansion_factor=1,
             print("{}/{} created. Total time={:.2f}s. Images per second {:.2f}.".format(i+1, num, t2-t0, 100/(t2-t1)))
             t1 = t2
     mean = mean/num
-    std = np.sqrt(var/num)
+    var = var/num
+    std = np.sqrt(var)
     print("mean :", mean)
+    print("mean :", var)
     print("std :", std)
 
     # save dataset information
@@ -212,6 +225,7 @@ def save_classify(name, num, input_size, target_size, expansion_factor=1,
     # these if statements save time when testing different models
     data.update({"num_classes": gen.num_classes})
     data.update({"input_size": gen.input_size})
+    data.update({"in_channels": 3})  # classify is always 3 channels
     if "orientation" in headers:
         data.update({"orientation": gen.angle_quantization})
     if "shape" in headers:
@@ -228,24 +242,31 @@ def save_classify(name, num, input_size, target_size, expansion_factor=1,
 
 if __name__ == "__main__":
 
-    input_size = 32
-    val_batch_size=batch_size = 256
+    input_size = 64
+    val_batch_size = 256
+    batch_size = 256
     train_size = 4096
     val_size = 1024
     shuffle = False
     num_workers = 0
     drop_last = True
-
+    tasks_names = [
+        "orientation",
+        "shape",
+        "letter",
+        "shape_color",
+        "letter_color",
+    ]
     validate = False
-    dataset_folder = 'images/classify0'  # root directory that has images and labels.csv, if None targets are made during the training
+    dataset_folder = None #'images/classify1'  # root directory that has images and labels.csv, if None targets are made during the training
     val_split = 0.1  # percentage of dataset used for validation
     bkg_path = 'backgrounds'  # path to background images, None is a random color background
-    target_size = 30
-    scale = (0.8, 1.0)
+    target_size = 62
+    scale = (0.72, 1.0)
     rotation = True
-    expansion_factor = 3  # generate higher resolution targets and downscale, improves aliasing effects
+    expansion_factor = 2  # generate higher resolution targets and downscale, improves aliasing effects
     target_transforms = T.Compose([
-        T.RandomPerspective(distortion_scale=0.4, p=1.0, interpolation=Image.BICUBIC),
+        T.RandomPerspective(distortion_scale=0.5, p=1.0, interpolation=Image.BICUBIC),
     ])
 
     train_transforms = T.Compose([
@@ -259,10 +280,10 @@ if __name__ == "__main__":
     ])
 
     # Save a dataset in the images folder
-    # save_classify("classify0", 50000, input_size, target_size, expansion_factor, scale, rotation, bkg_path, target_transforms)
+    # save_classify("classify2", 30, input_size, target_size, expansion_factor, scale, rotation, bkg_path, target_transforms)
 
     if dataset_folder:
-        full_set = FolderClassifyDataset(folder=dataset_folder, transforms=train_transforms)
+        full_set = FolderClassifyDataset(folder=dataset_folder, tasks_names=tasks_names, transforms=train_transforms)
         val_size = int(len(full_set)*val_split)
         if validate:
             if val_size < batch_size:
@@ -274,12 +295,16 @@ if __name__ == "__main__":
         set_info = json.load(open(dataset_folder+"/set_info.json"))
         set_mean = set_info["mean"]
         set_std = set_info["std"]
+        input_size = set_info["input_size"]
+        in_channels = set_info["in_channels"]
     else:
-        train_dataset = LiveClassifyDataset(length=train_size, input_size=input_size, target_size=target_size,
+        train_dataset = LiveClassifyDataset(length=train_size, tasks_names=tasks_names, 
+            input_size=input_size, target_size=target_size,
             expansion_factor=expansion_factor, scale=scale, rotation=rotation, bkg_path=bkg_path,
             target_transforms=target_transforms, transforms=train_transforms)
         if validate:
-            val_dataset = LiveClassifyDataset(length=val_size, input_size=input_size, target_size=target_size,
+            val_dataset = LiveClassifyDataset(length=val_size, tasks_names=tasks_names, 
+                input_size=input_size, target_size=target_size,
                 expansion_factor=expansion_factor, scale=scale, rotation=rotation, bkg_path=bkg_path,
                 target_transforms=target_transforms, transforms=val_transforms)
 
@@ -300,6 +325,6 @@ if __name__ == "__main__":
 
     # visualize_labels(train_loader)  # Does not work for FolderClassifyDataset
 
-    # dataset_stats(train_dataset, num=2000)
+    # dataset_stats(train_dataset, num=4000)
 
-    time_dataloader(train_dataset, batch_size, max_num_workers=8, num=8192)
+    # time_dataloader(train_dataset, batch_size, max_num_workers=8, num=16384)

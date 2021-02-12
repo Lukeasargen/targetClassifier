@@ -1,0 +1,134 @@
+Papers to read
+    Representation Learning: A Review and New Perspectives - Onenote
+    How transferable are features in deep neural networks? - https://arxiv.org/abs/1411.1792
+
+
+Classification
+
+Write the wide resnet with support for:
+    saving and loading
+    normalize the inputs
+    spatial pyramidal pooling layers
+    different activation functions - Mist or Leaky Relu a=0.2
+    batchnorm and spectral norm
+
+Write training script for feature extractor
+
+Create custom sampler
+
+Training experiments
+
+Start training with few augmentations (flipping and color)
+    activation functions
+    batchnorm and spectral norm
+    
+Add augmentations (cropping, scaling, ratio, rotation, perspective)
+    fixed stride downsampling w global avg vs spaital pyramidal pooling
+    Weight decay = 0.0 vs 5e-4, use 1e-4 with more augmentations
+    Cosine annealing learning rates
+    Initialization - try xvaier, standard normal var=0.02
+
+
+Start using linear classifiers for each task
+    Add branching network for different tasks - Xception
+    Add hyperbolic network for orientation
+
+
+DATA
+
+Change the orientation label to only correspond to the letter
+
+Image dataset : Any aerial image datsets
+    https://www.iuii.ua.es/datasets/masati/
+
+
+ACHITECTURE
+Wide residual network : https://arxiv.org/pdf/1605.07146.pdf
+
+Spectral Normalization Layers : https://arxiv.org/pdf/1802.05957.pdf
+    Wraps around conv and linear Layers
+    Keep the batchnorm
+
+Different Activations
+    Mish
+    Leaky relu a=0.2
+
+
+Adaptable input scaling
+Custom sampler - creates batches with the same dimensions
+Fist layer conv - found best empirically, (kernel % 2)+1 = stride gives good results
+
+
+Deep Layer Aggregation : https://arxiv.org/pdf/1707.06484.pdf
+deeplabv3
+
+Spatial Pyramid Pooling
+    Check implementations cited
+    https://scholar.google.com/scholar?cites=15950430662967917123&as_sdt=5,39&sciodt=0,39&hl=en
+
+
+
+TRAINING
+
+Weight decay
+    5e-4 is a good start for wide resnets
+    lower to 1e-4 if using stronger augmentations
+
+Cosine annealing learning rates : https://arxiv.org/pdf/1608.03983.pdf
+    iterations = len(dataloader) * num_epochs
+    step after each optimizer step
+
+Use MSE and CrossEntropy
+
+
+Augmentations
+    Try some used in YOLOv4 : https://arxiv.org/pdf/2004.10934.pdf
+
+
+Change the Orientation classifier to use Hyperbolic neural networks
+    https://arxiv.org/pdf/1805.09112.pdf
+    poincare disk model of hyperbolic geometry (Luke O files in slack)
+
+
+PRETRAINING
+
+Feature extractor
+    dataset - colored minist, stl10, imagenet downsampled (32, 64)
+    Same output features everytime, pyramidal Pooling
+
+Fine tuning classifiers
+    Initialization - try xvaier, standard normal var=0.02
+    Must have batchnorm, branching type archecture to handle scaling
+        Xception, fix the output width
+    Lower learning rate than PRETRAINING
+    Cosine annealing
+
+
+Adversarial Training
+    Techniques explained in Wasserstein GAN : https://arxiv.org/pdf/1701.07875.pdf
+
+
+
+Evaluation
+- visualize the metrics
+    -by task and class
+    - accuracy, precision, recall, specificty, f1 score
+    - matthews correlation coefficient
+    - confusion matrix - find errors within each task
+  - for errors by task, compute histogram of the the labels for the other tasks
+    - see if things like Orientation is wrong when the letter is O, 0, I, H, L, 1, etc.
+  - task correlation matrix
+- make evaluation dataset, with different background images
+
+
+
+Segementation
+- make segmentation image generator, output binary mask and bboxes
+- write live segmentation dataset
+- build unet
+
+Nested Unet : https://arxiv.org/pdf/1807.10165.pdf
+
+- save segmentation dataset as files
+- write dataloader for segmentation folder
+

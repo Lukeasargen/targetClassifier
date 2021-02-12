@@ -6,144 +6,6 @@ letter: 79.7%
 shape_color: 99.0%
 letter_color: 94.1%
 
-filters          blocks params   size   final accuracy                                                final loss sum
-32, 32, 32 , 32  1,1,1  65395    0.25MB [73.46191406 94.8425293  64.43481445 97.81494141 89.31884766] 2.4543
-16, 16, 32 , 64  1,1,1  84723    0.32MB [78.86962891 96.57592773 53.52172852 97.27172852 85.16235352] 2.8541
-16, 32, 32 , 64  1,1,1  99699    0.38MB [82.00683594 96.75292969 67.56591797 97.91870117 88.43383789] 2.1554
-32, 32, 64 , 64  1,1,1  164691   0.63MB [86.16333008 98.58398438 76.98364258 98.47412109 91.50390625] 1.5199
-16, 16, 32 , 64  2,2,2  181939   0.69MB [86.41967773 98.81591797 76.3671875  97.8515625  89.64233398] 1.5326
-16, 16, 32 , 64  2,3,2  200499   0.76MB [86.85913086 99.12719727 78.58276367 97.81494141 90.10620117] 1.4183
-32, 32, 64 , 128 1,1,1  321939   1.23MB [88.65356445 99.25537109 83.41064453 98.46801758 92.54150391] 1.2128
-32, 32, 64 , 64  2,2,2  331219   1.26MB [87.04223633 99.37133789 89.23339844 98.57177734 93.8293457 ] 0.9214
-32, 64, 64 , 64  2,2,2  446291   1.70MB [89.99633789 99.70703125 91.02783203 98.99902344 95.01953125] 0.7379
-16, 32, 64 , 128 2,2,2  703475   1.63MB [91.35131836 99.8046875  89.88647461 98.67553711 94.01245117] 0.7800
-32, 32, 64 , 128 2,2,2  709907   2.71MB [91.68701172 99.63989258 91.07055664 98.77929688 94.44580078] 0.7324
-32, 32, 64 , 128 2,3,2  783891   2.99MB [92.52319336 99.82910156 91.04614258 98.84643555 94.2565918 ] 0.6979
-*32, 64, 64 , 128 2,2,2  824979   3.15MB [92.85888672 99.90234375 93.46923828 99.02954102 95.5078125 ] 0.5733
-32, 32, 64 , 128 2,4,2  857875   3.27MB [92.87719727 99.79248047 91.69921875 98.66333008 94.59838867] 0.6640
-32, 64, 64 , 128 2,3,2  898693   3.43MB [93.32275391 99.86572266 94.16503906 99.0234375  95.72753906] 0.5375
-32, 64, 128, 256 1,1,1  1233043  4.70MB [91.94946289 99.76196289 90.28320312 98.99902344 94.70825195] 0.7729
-*32, 64, 128, 256 2,2,2  2783091 10.61MB [93.99414062 99.8046875  97.41210938 99.75585938 96.82617188] 0.3334 w perspective transforms
-
-
-/100
-train data
-f3x3s1p1a8          821,107 3.13MB [89.80102539 99.53613281 93.24951172 99.24316406 96.33789062] 0.5988
-f3x3s1p1a8_weighted 821,107 3.13MB [89.88647461 99.48730469 93.62182617 99.31640625 96.74682617] 0.5826
-f3x3s2p1a4          821,107 3.13MB [86.50512695 98.65722656 83.69750977 98.95019531 93.99414062] 1.0867
-f3x3s2p1a4_weighted 821,107 3.13MB [86.39526367 98.75488281 83.28857422 98.87084961 94.17724609] 1.0881
-f5x5s1p2a8          822,643 3.14MB [90.41137695 99.2980957  93.28613281 99.24926758 96.61254883] 0.5922
-f5x5s1p2a8_weighted 822,643 3.14MB [90.20996094 99.48120117 93.07861328 99.27978516 96.66748047] 0.5731
-f5x5s2p2a4          822,643 3.14MB [86.14501953 98.87695312 83.03222656 98.95629883 93.71337891] 1.1046
-f5x5s2p2a4_weighted 822,643 3.14MB [85.34545898 98.7487793  81.45751953 98.87695312 93.72558594] 1.1753
-f7x7s1p3a8          824,947 3.15MB [90.01464844 99.39575195 92.8894043  99.37744141 96.31347656] 0.6015
-f7x7s1p3a8_weighted 824,947 3.15MB [90.33203125 99.51782227 93.21899414 99.35302734 96.42333984] 0.5845
-f7x7s2p3a4          824,947 3.15MB [85.26000977 98.66943359 82.58666992 98.87084961 93.81713867] 1.1475
-f7x7s2p3a4_weighted 824,947 3.15MB [83.93554688 98.83422852 82.20214844 98.81591797 93.70117188] 1.1872
-val data
-f3x3s1p1a8          821,107 3.13MB [93.359375   99.65820312 97.99804688 99.75585938 98.29101562] 0.3014
-f3x3s1p1a8_weighted 821,107 3.13MB [93.79882812 99.70703125 98.2421875  99.8046875  98.2421875 ] 0.2608
-f3x3s2p1a4          821,107 3.13MB [91.50390625 99.4140625  93.45703125 99.85351562 96.72851562] 0.5315
-f3x3s2p1a4_weighted 821,107 3.13MB [91.84570312 99.56054688 93.06640625 99.609375   96.97265625] 0.5110
-f5x5s1p2a8          822,643 3.14MB [93.9453125  99.70703125 98.38867188 99.85351562 97.8515625 ] 0.2755
-f5x5s1p2a8_weighted 822,643 3.14MB [94.23828125 99.8046875  98.14453125 99.85351562 98.53515625] 0.2440
-f5x5s2p2a4          822,643 3.14MB [91.84570312 99.70703125 93.26171875 99.70703125 96.43554688] 0.5338
-f5x5s2p2a4_weighted 822,643 3.14MB [90.08789062 99.56054688 92.1875     99.65820312 95.94726562] 0.5940
-f7x7s1p3a8          824,947 3.15MB [93.31054688 99.8046875  97.99804688 99.75585938 98.2421875 ] 0.2842
-f7x7s1p3a8_weighted 824,947 3.15MB [93.359375   99.85351562 97.94921875 99.75585938 98.19335938] 0.2738
-f7x7s2p3a4          824,947 3.15MB [90.0390625  99.51171875 92.87109375 99.51171875 96.24023438] 0.5835
-f7x7s2p3a4_weighted 824,947 3.15MB [90.4296875  99.36523438 91.55273438 99.8046875  96.24023438] 0.6007
-
-use f5 s1 1p
-
-previous smallest: 16-18px depending on shape
-smallest target: 17px
-human readable: 18px no rotation, 22px rotation
-
-
-todo
-- save a classify dataset as files
-- write dataloader for classify folder
-- make segmentation image generator
-- write live segmentation dataset
-- build unet
-- save segmentation dataset as files
-- write dataloader for segmentation folder
-
-- make evaluation dataset
-- confusion matrix
-- train with weight decay
-- train with Adam, AdamW
-
--class weights, some classes are more difficult, I vs H, I vs L vs 1, Z vs N, 0 vs O
-  - can it be handled like an imbalanced dataset (undersample, oversample, )
--visualize the metrics, confusion matrix, make jupyter notebook
-  - evaluate x images
-  - calc metrics
-    -by task and class, accuracy, precision, recall, specificty, f1 score, matthews coreelation coefficient, confusion matrix
-  - write function that visualizes images, targets, and outputs
-    - highlight errors
-    - or only show outputs that have errors (100% accurate labels not shown)
-
-for visualizing final model outputs
-
-mean , std = torch.tensor([0.485, 0.456, 0.406]),torch.tensor([0.229, 0.224, 0.225])
-def denormalize(image):
-  image = image.to("cpu").clone().detach()
-  image = transforms.Normalize(-mean/std,1/std)(image) #denormalize
-  image = image.permute(1,2,0) 
-  image = torch.clamp(image,0,1)
-  return image.numpy()
-
-def visualize(image , actual , pred):
-  fig,ax = plt.subplots()
-  ax.imshow(denormalize(image))
-  ax.grid(False)
-  classes =  np.array(classLabels)[np.array(actual,dtype=np.bool)]
-  for i , s in enumerate(classes):
-    ax.text(0 , i*20  , s , verticalalignment='top', color="white", fontsize=16, weight='bold')
-  
-  classes =  np.array(classLabels)[np.array(pred,dtype=np.bool)]
-  for i , s in enumerate(classes):
-    ax.text(160 , i*20  , s , verticalalignment='top', color="black", fontsize=16, weight='bold')
-
-  plt.show()
-
-visualize(image[1] , label[1].tolist() , output[1].tolist())
-
-
-LiveClassifyDataset - no background
-8.52 seconds with 0 workers. 0.53 seconds per 16 batches. 0.019 GB ram.
-9.71 seconds with 1 workers. 0.61 seconds per 16 batches. 0.125 GB ram.
-5.37 seconds with 2 workers. 0.34 seconds per 16 batches. 0.242 GB ram.
-4.37 seconds with 3 workers. 0.27 seconds per 16 batches. 0.362 GB ram.
-3.39 seconds with 4 workers. 0.21 seconds per 16 batches. 0.477 GB ram.
-3.30 seconds with 5 workers. 0.21 seconds per 16 batches. 0.604 GB ram.
-2.82 seconds with 6 workers. 0.18 seconds per 16 batches. 0.718 GB ram.
-2.83 seconds with 7 workers. 0.18 seconds per 16 batches. 0.820 GB ram.
-2.52 seconds with 8 workers. 0.16 seconds per 16 batches. 0.952 GB ram.
-
-LiveClassifyDataset - background
-11.50 seconds with 0 workers. 0.72 seconds per 16 batches. 0.007 GB ram.
-12.59 seconds with 1 workers. 0.79 seconds per 16 batches. 0.326 GB ram.
-7.95 seconds with 2 workers. 0.50 seconds per 16 batches. 0.643 GB ram.
-7.72 seconds with 3 workers. 0.48 seconds per 16 batches. 0.968 GB ram.
-7.40 seconds with 4 workers. 0.46 seconds per 16 batches. 1.291 GB ram.
-8.31 seconds with 5 workers. 0.52 seconds per 16 batches. 1.607 GB ram.
-8.78 seconds with 6 workers. 0.55 seconds per 16 batches. 1.922 GB ram.
-9.79 seconds with 7 workers. 0.61 seconds per 16 batches. 2.226 GB ram.
-10.45 seconds with 8 workers. 0.65 seconds per 16 batches. 2.528 GB ram.
-
-FolderClassifyDataset
-30.81 seconds with 0 workers. 0.96 seconds per 32 batches. 0.072 GB ram.
-9.87 seconds with 1 workers. 0.31 seconds per 32 batches. 0.139 GB ram.
-6.34 seconds with 2 workers. 0.20 seconds per 32 batches. 0.267 GB ram.
-5.99 seconds with 3 workers. 0.19 seconds per 32 batches. 0.397 GB ram.
-6.07 seconds with 4 workers. 0.19 seconds per 32 batches. 0.524 GB ram.
-6.67 seconds with 5 workers. 0.21 seconds per 32 batches. 0.647 GB ram.
-7.42 seconds with 6 workers. 0.23 seconds per 32 batches. 0.808 GB ram.
-8.24 seconds with 7 workers. 0.26 seconds per 32 batches. 1.113 GB ram.
-8.86 seconds with 8 workers. 0.28 seconds per 32 batches. 1.003 GB ram.
 
 # bad, GPU to CPU is slow
 .cpu()
@@ -151,7 +13,7 @@ FolderClassifyDataset
 .numpy()
 
 # better
-.detach()  #doesn't transfer gpu memory, reemove any a attatched to the variable
+.detach()  #doesn't transfer gpu memory, remove graph attatched to the variable
 
 
 Unet
@@ -170,4 +32,16 @@ maxpooling vs stride=2
 
 
 
-max pooling cases problems if image down samples to odd width or height
+
+def visualize(image , actual , pred):
+  fig,ax = plt.subplots()
+  ax.imshow(denormalize(image))
+  ax.grid(False)
+  classes =  np.array(classLabels)[np.array(actual,dtype=np.bool)]
+  for i , s in enumerate(classes):
+    ax.text(0 , i*20  , s , verticalalignment='top', color="white", fontsize=16, weight='bold')
+  classes =  np.array(classLabels)[np.array(pred,dtype=np.bool)]
+  for i , s in enumerate(classes):
+    ax.text(160 , i*20  , s , verticalalignment='top', color="black", fontsize=16, weight='bold')
+  plt.show()
+visualize(image[1] , label[1].tolist() , output[1].tolist())

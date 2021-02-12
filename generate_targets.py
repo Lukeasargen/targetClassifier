@@ -82,13 +82,13 @@ class TargetGenerator():
         ]
         self.angle_quantization = 8
 
-        self.num_classes = [
-            self.angle_quantization,
-            len(self.shape_options),
-            len(self.letter_options),
-            len(self.color_options),
-            len(self.color_options),
-        ]
+        self.num_classes = {
+            "orientation" : self.angle_quantization,
+            "shape" : len(self.shape_options),
+            "letter" : len(self.letter_options),
+            "shape_color" : len(self.color_options),
+            "letter_color" : len(self.color_options),
+        }
 
     def color_to_hsv(self, color):
         """ Return a string that is used by PIL to specify HSL colorspace """
@@ -179,13 +179,14 @@ class TargetGenerator():
         elif shape == "pentagon":
             radius = r*np.random.randint(80, 100) / 100
             l = int(radius*np.random.randint(50, 75) / 100)
-            b = -90/5
+            b = -90/5 + np.random.choice([0, 180])
             points = self.make_regular_polygon(radius, 5, -angle+b, center=(cx, cy))
             draw.polygon(points, fill=color)
         elif shape == "hexagon":
             radius = r*np.random.randint(80, 100) / 100
             l = int(radius*np.random.randint(50, 80) / 100)
-            points = self.make_regular_polygon(radius, 6, -angle, center=(cx, cy))
+            b = np.random.choice([0, 30])
+            points = self.make_regular_polygon(radius, 6, -angle+b, center=(cx, cy))
             draw.polygon(points, fill=color)
         elif shape == "heptagon":
             radius = r*np.random.randint(80, 100) / 100
@@ -296,10 +297,10 @@ class TargetGenerator():
         shape_color = self.color_to_hsv(self.color_options[shape_color_idx])
         (cx, cy), l, angle = self.draw_shape(draw, input_size*self.expansion_factor, target_size*self.expansion_factor, shape_idx, shape_color,
             scale=scale, rotation=rotation)
-        letter_angle_offset = 0
-        orientation = (angle + np.random.uniform(-letter_angle_offset, letter_angle_offset)) % 360
+        letter_angle_offset = 180
+        angle = (angle + np.random.uniform(-letter_angle_offset, letter_angle_offset)) % 360
         letter_color = self.color_to_hsv(self.color_options[letter_color_idx])
-        letter_mark = self.draw_letter(draw, l, letter_idx, letter_color, orientation)
+        letter_mark = self.draw_letter(draw, l, letter_idx, letter_color, angle)
         ox, oy = letter_mark.size
         target.paste(letter_mark, (cx-ox//2, cy-1-oy//2), letter_mark)
 
@@ -313,12 +314,16 @@ class TargetGenerator():
         else:
             img = target  # return the target with transparency
 
+        # TODO : make angle label for hyperbolic network
+        angle = angle % 360
+
         # Quantize angle in cw direction
         # mod by quantization to avoid error at 0 degrees (rotation=False)
         offset =   360 / self.angle_quantization
-        orientation = int(np.floor((360-orientation-offset)*(self.angle_quantization)/360)) % self.angle_quantization
+        orientation = int(np.floor((360-angle-offset)*(self.angle_quantization)/360)) % self.angle_quantization
 
         label = {
+            "angle" : angle,
             "orientation": orientation,
             "shape": shape_idx,
             "letter": letter_idx,
@@ -380,20 +385,20 @@ def visualize_classify(gen):
     print(grid_img.shape)
     im = Image.fromarray(grid_img.astype('uint8'), 'RGB')
     im.show()
-    im.save("images/igh_res_targets.jpeg")
+    im.save("images/high_res_targets.jpeg")
 
 
 if __name__ == "__main__":
 
-    bkg_path = None  # path to background images
-    input_size = 32
-    target_size = 30
+    bkg_path = 'backgrounds'  # path to background images
+    input_size = 96
+    target_size = 94
     scale = (0.8, 1.0)
     rotation = True
     expansion_factor = 3  # generate higher resolution targets and downscale, improves aliasing effects
 
     target_tranforms = T.Compose([
-        T.RandomPerspective(distortion_scale=0.5, p=1.0, interpolation=Image.BICUBIC),
+        T.RandomPerspective(distortion_scale=0.4, p=1.0, interpolation=Image.BICUBIC),
     ])
 
     # create the generator object

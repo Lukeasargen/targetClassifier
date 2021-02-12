@@ -27,9 +27,10 @@ class WeightedTaskLoss(nn.Module):
     def __init__(self, num_tasks):
         super(WeightedTaskLoss, self).__init__()
         self.num_tasks = num_tasks
-        self.sigma = nn.Parameter( torch.ones(num_tasks) )
+        self.sigma = nn.Parameter(torch.ones(num_tasks))
         self.mse = nn.MSELoss()
         self.cel = nn.CrossEntropyLoss()
+        self.ones = nn.Parameter(torch.ones(num_tasks), requires_grad=False)
 
     def forward(self, output, target):
         loss = 0
@@ -76,56 +77,68 @@ if __name__ == "__main__" and '__file__' in globals():
     input_size = 32
     in_channels = 3
     backbone_features = 128
-    avgpool_size = 8
-    filters = [32, 64, 64, 128]
+    avgpool_size = None
+    filters = [32, 32, 64, 128]
     blocks = [2, 2, 2]
     bottleneck = False
     groups = 1
     width_per_group = None
-    max_pool = False
     dropout = 0.0
     # num_classes is defined by the dataset
     # Training Hyperparameters
-    num_epochs = 20
-    validate = True
-    val_batch_size=batch_size = 256
+    num_epochs = 72
     train_size = 16384
+    batch_size = 256
+    validate = False
     val_size = 2048
-    num_workers = 4
-    shuffle = False
-    drop_last = True
-    base_lr = 1e-1
+    val_batch_size = 256
+    num_workers = 8
+    shuffle = True
+    drop_last = True  # Does multiprocessing handle this well?
+    base_lr = 6e-2
     momentum = 0.9
     nesterov = True
-    weight_decay = 0.0  # 0, 1e-5, 3e-5, 1e-4, 3e-4, 5e-4, 1e-4, 3e-4, 1e-3
+    weight_decay = 5e-4  # 0, 1e-5, 3e-5, *1e-4, 3e-4, *5e-4, 3e-4, 1e-3, 1e-2
+    use_safe_weight_decay = True   # none on batchnorm or bias terms, I only see 0.5% lower error, could just be noise
     use_fp16 = False
     use_amp = False
-    lr_milestones = [70]
+    lr_milestones = [62, 68]  # for StepLR
     lr_gamma = 0.1  # for StepLR
-    use_lr_ramp_up = False
+    use_exp_lr = False
+    lr_exp_gamma = 0.98
+    use_lr_ramp_up = True
     lr_ramp_base = 1e-2
-    lr_ramp_steps = 10
+    lr_ramp_steps = 23
     use_weighted_loss = True
-    sigma_lr = base_lr/100  # lr of the output variance
+    sigma_lr = base_lr/1000  # lr of the output variance
     show_graph = True  # use plt to graph, acc and loss
     scalar_threshold = 45/360  # scalar magnitude of difference to be correct
     # Dataset config
-    dataset_folder = 'images/classify0'  # root directory that has images and labels.csv, if None targets are made during the training
-    val_split = 0.1  # percentage of dataset used for validation
-    bkg_path = None  # path to background images, None is a random color background
-    target_size = 30
+    tasks_names = [
+        "orientation",
+        "shape",
+        "letter",
+        "shape_color",
+        "letter_color",
+    ]
+    dataset_folder = None # 'images/classify1'  # root directory that has images and labels.csv, if None targets are made during the training
+    val_split = 0.03  # percentage of dataset used for validation
+    bkg_path = 'backgrounds'  # path to background images, None is a random color background
+    target_size = 31
     scale = (0.8, 1.0)
     rotation = True
-    expansion_factor = 3  # generate higher resolution targets and downscale, improves aliasing effects
+    expansion_factor = 2  # generate higher resolution targets and downscale, improves aliasing effects
     target_transforms = T.Compose([
-        T.RandomPerspective(distortion_scale=0.4, p=1.0, interpolation=Image.BICUBIC),
+        T.RandomPerspective(distortion_scale=0.5, p=1.0, interpolation=Image.BICUBIC),
     ])
 
     # If a folder is given, the statistics will be loaded from there
-    set_mean = [0.456, 0.494, 0.259]
-    set_std = [0.153, 0.135, 0.150]
+    set_mean = [0.484, 0.522, 0.290]
+    set_std = [0.172, 0.156, 0.170]
 
-    save_path = lambda r : 'runs/run{:04d}_best_loss.pth'.format(r)
+    save_path = lambda r, t : 'runs/multitask/run{:05d}_{}.pth'.format(r, t)
+    if not os.path.exists('runs/multitask'):
+        os.makedirs('runs/multitask')
 
     log_headers = [
         "epoch", "iterations",
@@ -134,9 +147,13 @@ if __name__ == "__main__" and '__file__' in globals():
     if validate:
         log_headers += ["val_loss", "val_loss_tasks", "val_acc_mean", "val_acc_tasks"]
 
+    if use_weighted_loss:
+        log_headers += ["sigma"]
+
     train_transforms = T.Compose([
         CustomTransformation(),
         T.Resize((input_size)),  # Make shortest edge this size
+        T.CenterCrop(input_size),
         T.ToTensor(),
     ])
     val_transforms = T.Compose([
@@ -146,7 +163,7 @@ if __name__ == "__main__" and '__file__' in globals():
     ])
 
     if dataset_folder:
-        full_set = FolderClassifyDataset(folder=dataset_folder, transforms=train_transforms)
+        full_set = FolderClassifyDataset(folder=dataset_folder, tasks_names=tasks_names, transforms=train_transforms)
         val_size = int(len(full_set)*val_split)
         if validate:
             if val_size < batch_size:
@@ -162,25 +179,31 @@ if __name__ == "__main__" and '__file__' in globals():
         print("Loaded mean and std from folder.")
         set_mean = set_info["mean"]
         set_std = set_info["std"]
+        input_size = set_info["input_size"]
+        in_channels = set_info["in_channels"]
     else:
-        train_dataset = LiveClassifyDataset(length=train_size, input_size=input_size, target_size=target_size,
+        train_dataset = LiveClassifyDataset(length=train_size, tasks_names=tasks_names,
+            input_size=input_size, target_size=target_size,
             expansion_factor=expansion_factor, scale=scale, rotation=rotation, bkg_path=bkg_path,
             target_transforms=target_transforms, transforms=train_transforms)
         if validate:
-            val_dataset = LiveClassifyDataset(length=val_size, input_size=input_size, target_size=target_size,
+            val_dataset = LiveClassifyDataset(length=val_size, tasks_names=tasks_names,
+                input_size=input_size, target_size=target_size,
                 expansion_factor=expansion_factor, scale=scale, rotation=rotation, bkg_path=bkg_path,
                 target_transforms=target_transforms, transforms=val_transforms)
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size ,shuffle=shuffle,
-            num_workers=num_workers, drop_last=drop_last)
+            num_workers=num_workers, drop_last=drop_last, persistent_workers=True)
     if validate:
         val_loader = DataLoader(dataset=val_dataset, batch_size=val_batch_size,
-                num_workers=num_workers, drop_last=drop_last)
+                num_workers=num_workers, drop_last=drop_last, persistent_workers=True)
 
     if dataset_folder:
-        num_classes = set_info["num_classes"]
+        all_classes = set_info["num_classes"]
     else:
-        num_classes = val_dataset.gen.num_classes
+        all_classes = train_dataset.gen.num_classes
+    print("all_classes :", all_classes)
+    num_classes = [all_classes.get(key) for key in tasks_names]
     print("num_classes :", num_classes)
 
     print("mean :", set_mean)
@@ -190,7 +213,7 @@ if __name__ == "__main__" and '__file__' in globals():
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print('device :', device)
     model = BuildMultiTaskResnet(backbone_features, num_classes, in_channels, avgpool_size,
-                filters, blocks, bottleneck, groups, width_per_group, max_pool)
+                filters, blocks, bottleneck, groups, width_per_group)
     model.set_normalization(mean=set_mean, std=set_std)
     model = model.to(device)
 
@@ -213,18 +236,41 @@ if __name__ == "__main__" and '__file__' in globals():
         model = safe_fp16(model)
 
     weighted_loss_citerion = None
-    if use_weighted_loss:
+
+    """
+    https://discuss.pytorch.org/t/weight-decay-in-the-optimizers-is-a-bad-idea-especially-with-batchnorm/16994/3
+    """
+    def add_weight_decay(module, weight_decay):
+        decay = []
+        no_decay = []
+        for name, param in model.named_parameters():
+            if not param.requires_grad:
+                continue
+            if len(param.shape) == 1:
+                no_decay.append(param)
+            else:
+                decay.append(param)
+        return [{'params': no_decay, 'weight_decay': 0.},
+                {'params': decay, 'weight_decay': weight_decay}]
+
+    if use_safe_weight_decay and weight_decay != 0:
+        params = add_weight_decay(model, weight_decay)
+    else:
+        params = [{'params': model.parameters(), 'lr': base_lr}]
+
+    if use_weighted_loss and len(tasks_names)>1:
+        print("Using uncertainty weighted loss.")
         weighted_loss_citerion = WeightedTaskLoss(num_tasks=len(num_classes)).to(device)
-    params = [{'params': model.parameters(), 'lr': base_lr}]
-    if weighted_loss_citerion:
-        params.append({'params': weighted_loss_citerion.parameters(), 'lr': sigma_lr})
+        params.append({'params': weighted_loss_citerion.parameters(), 'lr': sigma_lr, 'weight_decay': 0.0})
+
     optimizer = optim.SGD(params,
                         lr=base_lr,
                         momentum=momentum,
                         nesterov=nesterov,
                         weight_decay=weight_decay)
     scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=lr_milestones, gamma=lr_gamma)
-    # scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.95)
+    if use_exp_lr:
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=lr_exp_gamma)
 
     scalar = amp.GradScaler()
 
@@ -280,6 +326,7 @@ if __name__ == "__main__" and '__file__' in globals():
 
         if train:
             model.train()
+            model.basemodel.normalize.eval()  # freeze the normalization layer
         else:
             model.eval()  # lock batchnorm layers
 
@@ -332,13 +379,15 @@ if __name__ == "__main__" and '__file__' in globals():
             train_accuracy[epoch-1] = (acc_tasks)
             if weighted_loss_citerion:
                 sigma[epoch-1] = weighted_loss_citerion.sigma.data.detach().cpu().numpy()
+                print("sigma :", sigma[epoch-1])
             current_lr[epoch-1] = optimizer.param_groups[0]['lr']
         else:
             valid_loss[epoch-1] = loss_tasks
             valid_accuracy[epoch-1] = (acc_tasks)
 
         # print("tasks_loss_epoch :", tasks_loss_epoch.tolist())
-        print("acc post :", acc_tasks)
+        print("acc :", acc_tasks)
+        print("err :", 100-acc_tasks)
         # print("sigma :", weighted_loss_citerion.sigma.data.detach().cpu().numpy())
         print("EPOCH {}. train={}. Accuracy={:.2f}%. Loss={:.4f}".format(epoch, train, acc_tasks.mean(), unit_loss))
 
@@ -369,9 +418,9 @@ if __name__ == "__main__" and '__file__' in globals():
 
 
     # Create logger
-    log_name = "run{:04d}".format(current_run)
+    log_name = "run{:05d}".format(current_run)
 
-    logger = Logger(name=log_name, headers=log_headers)
+    logger = Logger(name=log_name, headers=log_headers, folder="runs/multitask")
 
     best_loss = None
     best_loss_epoch = 0
@@ -399,19 +448,18 @@ if __name__ == "__main__" and '__file__' in globals():
 
         if scheduler:  # Use pytorch scheduler
             scheduler.step()
-        else:  # Janky loss scheduler
-            if epoch in lr_milestones:
-                new_lr = lr_gamma * optimizer.param_groups[0]['lr']
-                optimizer.param_groups[0]['lr'] = new_lr
-                print("MILESTONE {}: lr reduced to {}".format(epoch, new_lr))
-        
+
+        which_loss = "val_loss" if validate else "train_loss"
         if best_loss == None:
-            best_loss = train_metrics["train_loss"]
+            best_loss = epoch_metrics[which_loss]
             best_model = copy.deepcopy(model)
-        elif train_metrics["train_loss"] < best_loss:
+        elif epoch_metrics[which_loss] < best_loss:
             best_loss_epoch = epoch
-            best_loss = train_metrics["train_loss"]
+            best_loss = epoch_metrics[which_loss]
             best_model = copy.deepcopy(model)
+
+        if use_weighted_loss:
+            epoch_metrics.update({"sigma" : sigma[epoch-1]})
 
         logger.update(epoch_metrics)
 
@@ -419,7 +467,8 @@ if __name__ == "__main__" and '__file__' in globals():
 
     print("Best Loss Epoch {} : {:.4f}".format(best_loss_epoch, best_loss))
 
-    save_multitask_resnet(best_model, save_path(current_run), input_size)
+    save_multitask_resnet(best_model, save_path(current_run, "best_loss"), input_size)
+    save_multitask_resnet(model, save_path(current_run, "final"), input_size)
 
     if show_graph:
 
@@ -427,10 +476,6 @@ if __name__ == "__main__" and '__file__' in globals():
         line_colors = [
             '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
         ]
-        labels_str = [
-            "Orientation", "Shape", "Letter", "Shape Color", "Letter Color"
-        ]
-
 
         fig, ax = plt.subplots(2, 2)
 
@@ -439,7 +484,7 @@ if __name__ == "__main__" and '__file__' in globals():
         ax[0][0].set_ylabel('accuracy %', fontsize=16, color=color)
         ax[0][0].tick_params(axis='y', labelcolor=color)
         for i in range(len(num_classes)):
-            ax[0][0].plot(range(1, num_epochs+1), train_accuracy[:,i], color=line_colors[i], label=labels_str[i])
+            ax[0][0].plot(range(1, num_epochs+1), train_accuracy[:,i], color=line_colors[i], label=tasks_names[i])
             if validate:
                 ax[0][0].plot(range(1, num_epochs+1), valid_accuracy[:,i], color=line_colors[i], linestyle='dashed')
         ax[0][0].legend()
@@ -448,7 +493,7 @@ if __name__ == "__main__" and '__file__' in globals():
         ax[0][1].set_ylabel('loss', fontsize=16, color=color)  # we already handled the x-label with ax1
         ax[0][1].tick_params(axis='y', labelcolor=color)
         for i in range(len(num_classes)):
-            ax[0][1].plot(range(1, num_epochs+1), train_loss[:,i], color=line_colors[i], label=labels_str[i])
+            ax[0][1].plot(range(1, num_epochs+1), train_loss[:,i], color=line_colors[i], label=tasks_names[i])
             if validate:
                 ax[0][1].plot(range(1, num_epochs+1), valid_loss[:,i], color=line_colors[i], linestyle='dashed')
 
@@ -461,9 +506,11 @@ if __name__ == "__main__" and '__file__' in globals():
             ax[1][1].set_ylabel('sigma', fontsize=16, color=color)  # we already handled the x-label with ax1
             ax[1][1].tick_params(axis='y', labelcolor=color)
             for i in range(len(num_classes)):
-                ax[1][1].plot(range(1, num_epochs+1), sigma[:,i], color=line_colors[i], label=labels_str[i])
+                ax[1][1].plot(range(1, num_epochs+1), sigma[:,i], color=line_colors[i], label=tasks_names[i])
 
 
         fig.tight_layout()  # otherwise the right y-label is slightly clipped
+
+        fig.savefig("images/run_{:05d}.png".format(current_run), bbox_inches='tight')
 
         plt.show()
