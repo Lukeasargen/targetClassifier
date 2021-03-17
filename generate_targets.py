@@ -1,5 +1,6 @@
 import os
 import random
+from typing import Sequence
 
 import numpy as np
 import pandas as pd
@@ -245,7 +246,7 @@ class TargetGenerator():
             specified letter on a transparent PIL image. This
             image has the specified size, color, and angle."""
         font_path = random.choice(self.font_options)
-        font = ImageFont.truetype(font_path, size=letter_size*2)
+        font = ImageFont.truetype(font_path, size=letter_size*2)  # Double since letter_size is based on radius
         w, h = draw.textsize(self.letter_options[letter_idx], font=font)
         # draw.text(xy=center, text=self.letter_options[letter_idx], fill=color, font=font, anchor="mm")
         img = Image.new("RGBA", (w, h), color=(0, 0, 0, 0))
@@ -273,15 +274,15 @@ class TargetGenerator():
                 if not None, then a target with transparent background is returned. else, a random
                 color is selected that is different from the shape and letter color
         """
-        if not input_size:
+        if input_size == None:
             input_size = self.input_size
-        if not target_size:
+        if target_size == None:
             target_size = self.target_size
-        if not scale:
+        if scale == None:
             scale = self.scale
-        if not rotation:
+        if rotation == None:
             rotation = self.rotation
-        if not target_transforms:
+        if target_transforms == None:
             target_transforms = self.target_transforms
 
         # Create the label with uniform random sampling
@@ -297,27 +298,29 @@ class TargetGenerator():
         shape_color = self.color_to_hsv(self.color_options[shape_color_idx])
         (cx, cy), l, angle = self.draw_shape(draw, input_size*self.expansion_factor, target_size*self.expansion_factor, shape_idx, shape_color,
             scale=scale, rotation=rotation)
-        letter_angle_offset = 180
+        letter_angle_offset = 180 if rotation else 0 # Allows the letter to not aligned with how a regular person would draw a letter
         angle = (angle + np.random.uniform(-letter_angle_offset, letter_angle_offset)) % 360
         letter_color = self.color_to_hsv(self.color_options[letter_color_idx])
         letter_mark = self.draw_letter(draw, l, letter_idx, letter_color, angle)
         ox, oy = letter_mark.size
-        target.paste(letter_mark, (cx-ox//2, cy-1-oy//2), letter_mark)
+        temp = Image.new('RGBA', size=(input_size*self.expansion_factor, input_size*self.expansion_factor), color=(0, 0, 0, 0))
+        temp.paste(letter_mark, (cx-(ox//2), cy-(oy//36)-(oy//2)), letter_mark)  # Put letter with offset based on size
+        target.alpha_composite(temp)  # removes the transparent aliasing border from the letter
 
         if target_transforms:
             target = target_transforms(target)
 
-        if not bkg_path:
+        if bkg_path == None:
             bkg_color = self.color_to_hsv(self.color_options[bkg_color_idx])
             img = Image.new('RGB', size=(input_size*self.expansion_factor, input_size*self.expansion_factor), color=bkg_color)
             img.paste(target, None, target)  # Alpha channel is the mask
         else:
-            img = target  # return the target with transparency
+            img = target  # return the target with transparency since it will be pasted on the background
 
         # TODO : make angle label for hyperbolic network
         angle = angle % 360
 
-        # Quantize angle in cw direction
+        # Quantize angle in cw direction, turns orientation into a classification task
         # mod by quantization to avoid error at 0 degrees (rotation=False)
         offset =   360 / self.angle_quantization
         orientation = int(np.floor((360-angle-offset)*(self.angle_quantization)/360)) % self.angle_quantization
@@ -346,12 +349,12 @@ class TargetGenerator():
             target_transforms=None, bkg_path=None):
         """ Generate a cropped target with it's classification label.
             For argument explainations see the draw_targets() description."""
-        if not input_size:
+        if input_size == None:
             input_size = self.input_size
-        if not bkg_path:
+        if bkg_path == None:
             bkg_path = self.bkg_path
-        target, label = self.draw_target(input_size=None, target_size=None, scale=None,
-                            rotation=None, target_transforms=None, bkg_path=bkg_path)
+        target, label = self.draw_target(input_size=input_size, target_size=target_size, scale=scale,
+                            rotation=rotation, target_transforms=target_transforms, bkg_path=bkg_path)
         if bkg_path:
             bkg = self.get_background()
             img = T.RandomResizedCrop(input_size*self.expansion_factor, scale=(0.08, 1.0), ratio=(3./4., 4./3.), interpolation=Image.NEAREST)(bkg)
@@ -362,12 +365,96 @@ class TargetGenerator():
         img = img.resize((input_size, input_size))
         return img, label
 
-    def gen_segment(self):
-        """ Generate an aerial image with it's target mask. """
-        # TODO : fill the image with targets and create corresponding binary mask
-        # load the correct arguments based on the deafults and the ones passed in
-        # sample the target locations
-        # loops over the locations and add the target to the map and the mask
+    def gen_segment(self, input_size=None, target_size=None, fill_prob=None,
+            target_transforms=None, bkg_path=None):
+        """ Generate an aerial image with it's target mask.
+            
+            input_size:
+                the final size of the image, can be a single value (square) or tuple (width, height)
+            target_size:
+                the smallest size of the targets. the largest target will be based on the 
+                input_size. targets can cover up to 25% of the image
+
+            """
+        if input_size == None:
+            input_size = self.input_size
+        if target_size == None:
+            target_size = self.target_size
+        if fill_prob == None:
+            fill_prob = 1.0
+        if bkg_path == None:
+            bkg_path = self.bkg_path
+
+        # pick random gridsize based on input and target_size
+        if isinstance(input_size, int):
+            bkg_w, bkg_h = input_size, input_size
+        elif isinstance(input_size, Sequence) and len(input_size) == 2:
+            bkg_w, bkg_h = input_size
+        # print("bkg_w, bkg_h :", bkg_w, bkg_h)
+
+        scale_w, scale_h = bkg_w//target_size, bkg_h//target_size  # Smallest grid cells based on the smallest target
+        # print("scale_w, scale_h :", scale_w, scale_h)
+        
+        max_num = min(scale_w, scale_h)
+        num = np.random.randint(2, max_num) if max_num>2 else 1 # Divisions along the smallest dimension
+        # print("num :", num)
+
+        # Scale divisions two both axis
+        if bkg_w > bkg_h:
+            num_w = int(scale_w/scale_h * num)
+            num_h = num
+        else:
+            num_h = int(scale_h/scale_w * num)
+            num_w = num
+        # print("num_w, num_h :", num_w, num_h)
+
+        step_w, step_h = bkg_w/num_w, bkg_h/num_h  # Rectangle size for each target
+        # print("step_w, step_h :", step_w, step_h)
+
+        new_target_size = int(min(step_w, step_h))  # Largest target that can fit
+        # print("new_target_size :", new_target_size)
+
+        new_scale = (1.0, target_size/new_target_size)  # New scale between the largest target and the smallest target
+        # print("new_scale :", new_scale)
+
+        # This mask is first used to place all the targets, then converted into a binary image
+        place_targets = Image.new('RGBA', size=(bkg_w*self.expansion_factor, bkg_h*self.expansion_factor), color=(0, 0, 0, 0))
+
+        # fill the grid randomly with targets
+        target_prob_mask = np.random.rand(num_w*num_h) < fill_prob
+        # print("target_prob_mask :", target_prob_mask)
+
+        offset_x, offset_y = int(step_w-new_target_size), int(step_h-new_target_size)
+        for i in range(len(target_prob_mask)):
+            y = i // num_w
+            x = (i - y*num_w)
+            if target_prob_mask[i]:
+                # print("x, y :", x, y, int(x*step_w), int(y*step_h))
+                target, label = self.draw_target(input_size=new_target_size, target_size=new_target_size-1, scale=new_scale, rotation=True,
+                                    target_transforms=target_transforms, bkg_path=True)
+                # draw_image makes a sqaure image, so it can be shifted in the rectangle
+                ox = np.random.randint(0, offset_x) if offset_x != 0 else 0
+                oy = np.random.randint(0, offset_y) if offset_y != 0 else 0
+                place_targets.paste(target, (int((x*step_w+ox)*self.expansion_factor), int((y*step_h+oy)*self.expansion_factor)), target)  # Alpha channel is the mask
+
+        mask = Image.new('RGBA', size=(bkg_w*self.expansion_factor, bkg_h*self.expansion_factor), color=(0, 0, 0, 0))
+        mask.alpha_composite(place_targets)  # removes the transparent aliasing border from the mask
+
+        if bkg_path:
+            bkg = self.get_background()
+            img = T.RandomResizedCrop(size=(bkg_h*self.expansion_factor, bkg_w*self.expansion_factor), scale=(0.08, 1.0), ratio=(3./4., 4./3.), interpolation=Image.NEAREST)(bkg)
+            img.paste(mask, None, mask)  # Alpha channel is the mask
+        else:
+            img = mask.convert("RGB")  # return the mask in rgb
+
+        img = img.resize((bkg_w, bkg_h))
+
+        # Convert the transparency to the binary mask
+        # temp = Image.new('RGB', size=(bkg_w*self.expansion_factor, bkg_h*self.expansion_factor), color=(0, 0, 0))
+        # temp.paste(Image.fromarray(255*np.ones((bet.size[1], bet.size[0]))), None, mask)
+        mask = Image.fromarray(np.asarray(mask)[:,:,3])
+        mask = mask.convert("RGB").resize((bkg_w, bkg_h))
+
         return img, mask
 
 
@@ -410,10 +497,9 @@ if __name__ == "__main__":
     # x.show()
     # print(y)
 
-    # these will have lots of noise
-    # the preporcesing for the network does some pooling and filtering so don't worry about it
-    visualize_classify(gen)
+    # visualize_classify(gen)
 
-    # TODO
-    # img, mask = gen.gen_segment()
-
+    img, mask = gen.gen_segment(input_size=(256, 256), target_size=20, fill_prob=0.5)
+    out = Image.fromarray(np.hstack([np.asarray(img), np.asarray(mask)]))
+    out.show()
+    # out.save("images/seg_example.png")

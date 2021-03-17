@@ -39,7 +39,8 @@ The goal is to implement this model into an aerial imaging pipeline. A segmentat
 
 [generate_targets.py](https://github.com/Lukeasargen/targetClassifier/blob/main/generate_targets.py) has a generator class which can produce both classification and segmentation data.
 
-Targets before preprocessing are very noisey and have severe aliasing effects. To combat this, the targets are generated at higher resolution defined by the expansion_factor variable (3 or 4 times expansion does not increase cpu load dramatically). Then, in the processing step before the images are batched, the target images are resized using the torchvision implementation transforms.Resize(). Since this will been necessary for real world images, it is assumed to be valid for training. Below are samples of the classification targets.
+### Synthetic Classification Data
+Targets before preprocessing are very noisey and have severe aliasing effects. To combat this, the targets are generated at higher resolution defined by the expansion_factor variable (3 or 4 times expansion does not increase cpu load dramatically). Then, in the processing step before the images are batched, the target images are resized using the torchvision implementation transforms.Resize(). Since this will been necessary for real images, it is assumed to be valid for training. Below are samples of the classification targets.
 
 High resolution targets:
 
@@ -53,7 +54,38 @@ Example of the labels:
 
 ![classify_labels](/images/readme/classify_labels.png)
 
-## Model
+
+### Synthetic Segmentation Data
+Segmentation images have the same aliasing issues as the classification. Segmentation images are generated at a higher resolution defined by the expansion_factor variable and downsampling smooths the images. The general process for creating these images follows these steps:
+
+1. The image is divided into grid cells based on the smallest target specified by the target_size argument. Then the grid size is uniformly sampled between the largest and smallest size. The grid determines the position of the targets and the scale of the target is randomly sampled. Below shows an example of the smallest grid and the largest grid filled with 100% probability of target. Image is 256x256 and the target_size is 32.
+
+    Smallest grid:
+
+    ![grid_smallest](/images/readme/grid_smallest.png)
+
+
+    Largest grid:
+
+    ![grid_largest](/images/readme/grid_largest.png)
+
+
+2. Then the grid cells are filled at random based on the fill probability. Additional, for now sqaure images, the targets are translated within their grid cell.
+
+    Exampleinput_size=512, target_size=32, fill_prob=0.4
+    ![gen_segment_example](/images/readme/gen_segment_example.png)
+
+## Model 1 - Multitask Resnet
+
+Reasoning
+
+Image of the model architecture
+
+Explanation of the loss calculation
+
+Example of the metrics from a single training run:
+![multitask_resnet_run](/images/readme/multitask_resnet_run.png)
+
 
 ## Training
 

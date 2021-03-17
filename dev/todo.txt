@@ -123,7 +123,6 @@ Evaluation
 
 
 Segementation
-- make segmentation image generator, output binary mask and bboxes
 - write live segmentation dataset
 - build unet
 

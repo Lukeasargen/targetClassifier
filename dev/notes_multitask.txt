@@ -184,7 +184,7 @@ val     [91.08258929 98.92857143 96.76339286 99.98883929 98.30357143]
 
 
 
-joint task  error
+joint task  error, train_size=16384
 
 classify0 orientation letter [32, 32, 64, 128] [2, 3, 2] wd=0 weighted
 train   [3.81696429 2.37946429]
@@ -280,6 +280,12 @@ train   [0.67749023 1.37329102 0.03662109 0.81787109]
 live slsclc [32, 32, 64, 128, 128] [1, 1, 1, 1] wd=5e-4 bn safe weighted lr=6e-2 ramp=23,1e-2, step=[62,68],0.1,72 in=64 62,0.72
 train   [1.03149414 2.04467773 0.04272461 0.79345703]
 
+
+live oslsclc [32, 32, 64, 128] [2, 2, 2] b512 wd=5e-4 bn safe weighted lr=6e-2 ramp=23,1e-2, step=[62,68],0.1,72 in=48
+train   [17.1875      2.8137207  12.11547852  0.09765625  4.69970703]
+
+live oslsclc [32, 32, 64, 128] [2, 2, 2] b64 wd=5e-4 bn safe weighted lr=6e-2 ramp=23,1e-2, step=[62,68],0.1,72 in=48
+train   [15.49682617  2.27661133  7.99560547  0.52490234  5.10864258]
 
 
 

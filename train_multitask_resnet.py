@@ -326,7 +326,6 @@ if __name__ == "__main__" and '__file__' in globals():
 
         if train:
             model.train()
-            model.basemodel.normalize.eval()  # freeze the normalization layer
         else:
             model.eval()  # lock batchnorm layers
 

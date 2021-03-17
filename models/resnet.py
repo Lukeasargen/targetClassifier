@@ -151,6 +151,15 @@ class BasicResnet(nn.Module):
         self.normalize.running_var.requires_grad = False  # variance
         self.normalize.eval()
 
+    def train(self: nn.Module, mode: bool = True) -> nn.Module:
+        """ Replace pytorch train method in order to keep the normalization
+            layer frozen. """
+        self.training = mode
+        for module in self.children():
+            module.train(mode)
+        self.normalize.eval()
+        return self
+
     def forward(self, x, dropout=0.0):
         out = self.normalize(x)
         out = self.first_layer(out)
