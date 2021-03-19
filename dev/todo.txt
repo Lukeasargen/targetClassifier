@@ -131,3 +131,9 @@ Nested Unet : https://arxiv.org/pdf/1807.10165.pdf
 - save segmentation dataset as files
 - write dataloader for segmentation folder
 
+
+
+Gen
+- fixed the star generator, use a single polygon
+
+

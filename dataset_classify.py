@@ -5,7 +5,7 @@ import time
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from PIL import Image, ImageFilter
+from PIL import Image
 import torch
 from torch.utils.data import Dataset, DataLoader  # Building custom datasets
 import torchvision.transforms as T  # Image processing
@@ -157,9 +157,12 @@ def time_dataloader(dataset, batch_size=64, max_num_workers=8, num=4096):
         ram_before = psutil.virtual_memory()[3]
         train_loader = DataLoader(
             dataset=dataset, batch_size=batch_size, shuffle=True,
-            num_workers=i, drop_last=True)
+            num_workers=i, drop_last=True, persistent_workers=(True if i >0 else False))
         t0 = time.time()
         max_ram = 0
+        ts = time.time()
+        [_ for _ in train_loader]
+        print(time.time()-ts)
         for batch_idx, (data, target) in enumerate(train_loader):
             r = psutil.virtual_memory()[3]
             if r > max_ram:
@@ -309,10 +312,10 @@ if __name__ == "__main__":
                 target_transforms=target_transforms, transforms=val_transforms)
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size ,shuffle=shuffle,
-            num_workers=num_workers, drop_last=drop_last)
+            num_workers=num_workers, drop_last=drop_last, persistent_workers=True)
     if validate:
         val_loader = DataLoader(dataset=val_dataset, batch_size=val_batch_size,
-                num_workers=num_workers, drop_last=drop_last)
+                num_workers=num_workers, drop_last=drop_last, persistent_workers=True)
 
     # x, y = train_dataset[0]
     # print("Image :", x.shape)

@@ -72,9 +72,15 @@ Segmentation images have the same aliasing issues as the classification. Segment
 
 2. Then the grid cells are filled at random based on the fill probability. Additional, for now sqaure images, the targets are translated within their grid cell.
 
-    Exampleinput_size=512, target_size=32, fill_prob=0.4
+    Example (input_size=512, target_size=32, fill_prob=0.4):
     ![gen_segment_example](/images/readme/gen_segment_example.png)
 
+A few examples from the segmentation generator:
+
+![visualize_segment](/images/readme/visualize_segment.jpeg)
+
+
+visualize_segment
 ## Model 1 - Multitask Resnet
 
 Reasoning

@@ -381,7 +381,7 @@ class TargetGenerator():
         if target_size == None:
             target_size = self.target_size
         if fill_prob == None:
-            fill_prob = 1.0
+            fill_prob = 0.5
         if bkg_path == None:
             bkg_path = self.bkg_path
 
@@ -395,7 +395,9 @@ class TargetGenerator():
         scale_w, scale_h = bkg_w//target_size, bkg_h//target_size  # Smallest grid cells based on the smallest target
         # print("scale_w, scale_h :", scale_w, scale_h)
         
-        max_num = min(scale_w, scale_h)
+        max_num = min(scale_w, scale_h)//3  # if you can't fit 3 targets, just use 1
+        # print("max_num :", max_num)
+
         num = np.random.randint(2, max_num) if max_num>2 else 1 # Divisions along the smallest dimension
         # print("num :", num)
 
@@ -472,7 +474,25 @@ def visualize_classify(gen):
     print(grid_img.shape)
     im = Image.fromarray(grid_img.astype('uint8'), 'RGB')
     im.show()
-    im.save("images/high_res_targets.jpeg")
+    im.save("images/visualize_classify.jpeg")
+
+
+def visualize_segment(gen):
+    nrows = 4
+    ncols = 2
+    rows = []
+    for i in range(nrows):
+        row = []
+        for j in range(ncols):
+            img, mask = gen.gen_segment(input_size=(512, 512), target_size=20, fill_prob=0.5)
+            row.append(img)
+            row.append(mask)
+        rows.append( np.hstack(row) )
+    grid_img = np.vstack(rows)
+    print(grid_img.shape)
+    im = Image.fromarray(grid_img.astype('uint8'), 'RGB')
+    im.show()
+    im.save("images/visualize_segment.png")
 
 
 if __name__ == "__main__":
@@ -499,7 +519,9 @@ if __name__ == "__main__":
 
     # visualize_classify(gen)
 
-    img, mask = gen.gen_segment(input_size=(256, 256), target_size=20, fill_prob=0.5)
+    img, mask = gen.gen_segment(input_size=(1024, 1024), target_size=20, fill_prob=0.5)
     out = Image.fromarray(np.hstack([np.asarray(img), np.asarray(mask)]))
     out.show()
-    # out.save("images/seg_example.png")
+    out.save("images/seg_example.jpg")
+
+    # visualize_segment(gen)
