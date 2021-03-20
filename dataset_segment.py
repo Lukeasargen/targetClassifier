@@ -3,6 +3,7 @@ import time
 
 import matplotlib.pyplot as plt
 import numpy as np
+from PIL import Image
 import torch
 from torch.utils.data import Dataset, DataLoader  # Building custom datasets
 import torchvision.transforms as T  # Image processing
@@ -25,7 +26,7 @@ class LiveSegmentDataset(Dataset):
         self.target_transforms = target_transforms
         self.gen = TargetGenerator(input_size=input_size, target_size=target_size,
             expansion_factor=expansion_factor, target_transforms=target_transforms, bkg_path=bkg_path)
-        self.totensor = T.ToTensor()
+        self.transform_mask = T.Compose([T.Grayscale(num_output_channels=1), T.ToTensor()])
         self.transforms = T.Compose([T.ToTensor()])
         if transforms:
             self.transforms = transforms
@@ -33,28 +34,30 @@ class LiveSegmentDataset(Dataset):
     def __len__(self):
         return self.length
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx, transforms=None):
+        if transforms == None:
+            transforms = self.transforms
         img, mask = self.gen.gen_segment(fill_prob=self.fill_prob)
-        return self.transforms(img), self.totensor(mask)
+        return self.transforms(img), self.transform_mask(mask)
 
 
 def visualize_dataloader(dataloader):
     from torchvision.utils import make_grid
-    num_rows, num_cols = 4, 2
+    num_rows, num_cols = 8, 8
     out = None
     for images, masks in dataloader:
         # print(images.shape, masks.shape)
+        # print(dataloader.dataset.gen.bkg_count)
         if out == None:
-            out = torch.cat((images, masks), 0)
+            out = images
         else:
             out = torch.cat((out, images), 0)
-            out = torch.cat((out, masks), 0)
-        # print(out.shape[0])
-        if out.shape[0] > 2*num_rows*num_cols:
+        print(out.shape[0])
+        if out.shape[0] > num_rows*num_cols:
             break
     fig, ax = plt.subplots(figsize=(num_rows, num_cols))
     ax.set_xticks([]); ax.set_yticks([])
-    ax.imshow(make_grid((out.detach()[:2*num_rows*num_cols]), nrow=num_rows).permute(1, 2, 0))
+    ax.imshow(make_grid((out.detach()[:num_rows*num_cols]), nrow=num_rows).permute(1, 2, 0))
     plt.show()
     fig.savefig('images/segment_processed.png', bbox_inches='tight')
 
@@ -116,18 +119,16 @@ def time_dataloader(dataset, batch_size=64, max_num_workers=8, num=4096):
 
 if __name__ == "__main__":
 
-    input_size = 512  # single value for square images
-    val_batch_size = 4
+    input_size = 256
+
+    num_epochs = 2
+    train_size = 1024
     batch_size = 4
-    train_size = 4096
-    val_size = 1024
     shuffle = False
     num_workers = 4
     drop_last = True
 
-    validate = False
     dataset_folder = None #'images/classify1'  # root directory that has images and labels.csv, if None targets are made during the training
-    val_split = 0.1  # percentage of dataset used for validation
     bkg_path = 'backgrounds'  # path to background images, None is a random color background
     target_size = 20  # Smallest target size
     fill_prob = 0.5
@@ -156,17 +157,17 @@ if __name__ == "__main__":
         target_transforms=target_transforms, transforms=train_transforms)
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size ,shuffle=shuffle,
-            num_workers=num_workers, drop_last=drop_last, persistent_workers=True)
+            num_workers=num_workers, drop_last=drop_last, persistent_workers=(True if num_workers > 0 else False))
 
-    # x, y = train_dataset[0]
-    # print("Image :", x.shape)
-    # print("Mask :", y.shape)
+    x, y = train_dataset[0]
+    print("Image :", x.shape)
+    print("Mask :", y.shape)
 
     # im = T.ToPILImage(mode='RGB')(x)
     # im.show()
 
-    # visualize_dataloader(train_loader)
+    visualize_dataloader(train_loader)
 
     # dataset_stats(train_dataset, num=800)
 
-    time_dataloader(train_dataset, batch_size=4, max_num_workers=8, num=1024)
+    # time_dataloader(train_dataset, batch_size=4, max_num_workers=8, num=1024)

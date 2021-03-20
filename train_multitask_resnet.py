@@ -193,10 +193,10 @@ if __name__ == "__main__" and '__file__' in globals():
                 target_transforms=target_transforms, transforms=val_transforms)
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size ,shuffle=shuffle,
-            num_workers=num_workers, drop_last=drop_last, persistent_workers=True)
+            num_workers=num_workers, drop_last=drop_last, persistent_workers=(True if num_workers > 0 else False))
     if validate:
         val_loader = DataLoader(dataset=val_dataset, batch_size=val_batch_size,
-                num_workers=num_workers, drop_last=drop_last, persistent_workers=True)
+                num_workers=num_workers, drop_last=drop_last, persistent_workers=(True if num_workers > 0 else False))
 
     if dataset_folder:
         all_classes = set_info["num_classes"]
@@ -510,6 +510,6 @@ if __name__ == "__main__" and '__file__' in globals():
 
         fig.tight_layout()  # otherwise the right y-label is slightly clipped
 
-        fig.savefig("images/run_{:05d}.png".format(current_run), bbox_inches='tight')
+        fig.savefig("images/runs/multitask/run_{:05d}.png".format(current_run), bbox_inches='tight')
 
         plt.show()

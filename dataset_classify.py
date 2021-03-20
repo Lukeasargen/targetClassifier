@@ -312,10 +312,10 @@ if __name__ == "__main__":
                 target_transforms=target_transforms, transforms=val_transforms)
 
     train_loader = DataLoader(dataset=train_dataset, batch_size=batch_size ,shuffle=shuffle,
-            num_workers=num_workers, drop_last=drop_last, persistent_workers=True)
+            num_workers=num_workers, drop_last=drop_last, persistent_workers=(True if num_workers > 0 else False))
     if validate:
         val_loader = DataLoader(dataset=val_dataset, batch_size=val_batch_size,
-                num_workers=num_workers, drop_last=drop_last, persistent_workers=True)
+                num_workers=num_workers, drop_last=drop_last, persistent_workers=(True if num_workers > 0 else False))
 
     # x, y = train_dataset[0]
     # print("Image :", x.shape)

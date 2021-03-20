@@ -44,6 +44,7 @@ class TargetGenerator():
             # TODO : resize to save memory???
             self.backgrounds = [pil_loader(os.path.join(os.getcwd(), bkg_path, x)) for x in os.listdir(bkg_path)]  # list of pil images
             self.bkg_choices = list(range(len(self.backgrounds)))  # List of indices that is looped through to select images in self.backgrounds
+            np.random.shuffle(self.bkg_choices)
 
         self.shape_options = [
             "circle", "semicircle", "quartercircle", "triangle",
@@ -395,7 +396,7 @@ class TargetGenerator():
         scale_w, scale_h = bkg_w//target_size, bkg_h//target_size  # Smallest grid cells based on the smallest target
         # print("scale_w, scale_h :", scale_w, scale_h)
         
-        max_num = min(scale_w, scale_h)//3  # if you can't fit 3 targets, just use 1
+        max_num = min(scale_w, scale_h)
         # print("max_num :", max_num)
 
         num = np.random.randint(2, max_num) if max_num>2 else 1 # Divisions along the smallest dimension

@@ -38,16 +38,15 @@ if __name__ == "__main__":
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-    from save_load import load_multitask_resnet
+    # from models.multitask import load_multitask_resnet
+    # path = "runs/multitask/run00479_best_loss.pth"
+    # model, input_size = load_multitask_resnet(path, device)
+    # data = torch.rand((1, 3, input_size, input_size))
+    # model_time(model, data, n_trials=100, device=device)
 
-    path = "runs/run0090_best_loss.pth"
-    model, input_size, mean, std = load_multitask_resnet(path, device)
-
-    in_channels = 3
-    batch = 1
-    n_trials = 100
-
-    data = torch.rand((batch, in_channels, input_size, input_size))
-
-    model_time(model, data, n_trials, device)
+    from models.unet import UNet
+    model = UNet(in_channels=3, out_channels=1, filters=16)
+    input_size = 400
+    data = torch.rand((1, 3, input_size, input_size))
+    model_time(model, data, n_trials=200, device=device)
 

@@ -27,10 +27,6 @@ Start jupyter notebook from the project directory with this command
 jupyter notebook
 ```
 
-Weighted loss from here:<br>
-Kendall, Alex, Yarin Gal, and Roberto Cipolla. "Multi-task learning using uncertainty to weigh losses for scene geometry and semantics." Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition. 2018.
-[[arXiv](https://arxiv.org/abs/1705.07115)].
-
 # Purpose
 
 The goal is to implement this model into an aerial imaging pipeline. A segmentation model will detect targets and a classification model will assign classification labels to the objects.
@@ -58,7 +54,7 @@ Example of the labels:
 ### Synthetic Segmentation Data
 Segmentation images have the same aliasing issues as the classification. Segmentation images are generated at a higher resolution defined by the expansion_factor variable and downsampling smooths the images. The general process for creating these images follows these steps:
 
-1. The image is divided into grid cells based on the smallest target specified by the target_size argument. Then the grid size is uniformly sampled between the largest and smallest size. The grid determines the position of the targets and the scale of the target is randomly sampled. Below shows an example of the smallest grid and the largest grid filled with 100% probability of target. Image is 256x256 and the target_size is 32.
+1. The image is divided into grid cells based on the smallest target specified by the target_size argument. Then the grid size is uniformly sampled between the largest and smallest size. The grid determines the position of the targets and the scale of the target is randomly sampled. Below shows an example of the smallest grid and the largest grid filled with 100% probability. The images are 256x256 and the target_size is 32.
 
     Smallest grid:
 
@@ -80,8 +76,7 @@ A few examples from the segmentation generator:
 ![visualize_segment](/images/readme/visualize_segment.jpeg)
 
 
-visualize_segment
-## Model 1 - Multitask Resnet
+## Classification Model 1 - Multitask Resnet
 
 Reasoning
 
@@ -89,10 +84,27 @@ Image of the model architecture
 
 Explanation of the loss calculation
 
+Weighted loss from here:<br>
+Kendall, Alex, Yarin Gal, and Roberto Cipolla. "Multi-task learning using uncertainty to weigh losses for scene geometry and semantics." Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition. 2018.
+[[arXiv](https://arxiv.org/abs/1705.07115)].
+
+
+Full training details:
+```
+# Model Config
+
+# Training Hyperparameters
+
+# Optimization
+
+# Dataset parameters
+
+
+```
+
 Example of the metrics from a single training run:
+
 ![multitask_resnet_run](/images/readme/multitask_resnet_run.png)
 
-
-## Training
 
 ## Results

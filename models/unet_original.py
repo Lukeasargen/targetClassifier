@@ -3,8 +3,6 @@ import copy
 import torch
 import torch.nn as nn  # Building the model
 import torch.nn.functional as F
-from torchsummary import summary
-
 
 def save_unet():
     pass
@@ -112,18 +110,17 @@ if __name__ == "__main__":
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-    input_size = 828
+    input_size = 572
     in_channels = 3
     out_channels = 1
     filters = [64,128,256,512,1024]
 
     model = Unet(in_channels, out_channels, filters).to(device)
-    
-    model.train()
-    
-    x = torch.randn(1, in_channels, input_size, input_size).to(device)
-    out = model(x)
-    print(out.shape)
+        
+    # x = torch.randn(1, in_channels, input_size, input_size).to(device)
+    # out = model(x)
+    # print(out.shape)
 
-    # summary(model.to(device), (in_channels, input_size, input_size))
+    from torchsummary import summary
+    summary(model.to(device), (in_channels, input_size, input_size))
 

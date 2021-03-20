@@ -1,0 +1,71 @@
+
+
+
+pooling: use maxpool
+f=16 avgpool leaky=0.2 ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=0.0 bce
+loss=0.03721. acc=0.96077. bce=0.03721. jaccard=0.82711. dice=0.90531. tversky=0.90208. focal=0.00003.
+f=16 maxpool leaky=0.2 ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=0.0 bce
+loss=0.03641. acc=0.96067. bce=0.03641. jaccard=0.83636. dice=0.91078. tversky=0.90987. focal=0.00003.
+f=16 stride=2 leaky=0.2 ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=0.0 bce
+loss=0.04516. acc=0.95748. bce=0.04516. jaccard=0.80625. dice=0.89251. tversky=0.89374. focal=0.00005.
+
+weight decay: add it
+f=16 stride=2 leaky=0.2 ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 bce
+loss=0.04175. acc=0.95965. bce=0.04175. jaccard=0.81426. dice=0.89758. tversky=0.89551. focal=0.00004.
+f=16 maxpool leaky=0.2 ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 bce
+loss=0.03791. acc=0.95966. bce=0.03791. jaccard=0.82527. dice=0.90422. tversky=0.90364. focal=0.00003.
+f=16 avgpool leaky=0.2 ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 bce
+loss=0.04082. acc=0.95895. bce=0.04082. jaccard=0.81916. dice=0.90049. tversky=0.89951. focal=0.00003.
+
+activation: regular relu is better
+f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 bce
+loss=0.03504. acc=0.96223. bce=0.03504. jaccard=0.83678. dice=0.91109. tversky=0.90911. focal=0.00002.
+
+which loss: jaccard has best metrics
+f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 jaccard
+loss=0.09772. acc=0.96380. bce=0.07322. jaccard=0.90228. dice=0.94858. tversky=0.95572. focal=0.00019.
+f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 dice
+loss=0.05941. acc=0.96024. bce=0.07636. jaccard=0.88790. dice=0.94059. tversky=0.94908. focal=0.00023.
+f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 tversky(a=0.8,b=0.2)
+loss=0.00054. acc=0.45020. bce=1.55466. jaccard=0.00034. dice=0.00069. tversky=0.00054. focal=0.48396.  always outputs no target
+f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 tversky(a=0.3,b=0.7)
+loss=0.04820. acc=0.96188. bce=0.05800. jaccard=0.89408. dice=0.94404. tversky=0.95180. focal=0.00010.  a lot less fn with b>0.5
+f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 focal(a=0.5,g=2)
+loss=0.00122. acc=0.93189. bce=0.14086. jaccard=0.43189. dice=0.60315. tversky=0.57819. focal=0.00122.  really bad, gets like 3 targets
+
+loss w bce
+f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 bce,jaccard
+loss=0.16853. acc=0.95936. bce=0.04523. jaccard=0.87670. dice=0.93426. tversky=0.93853. focal=0.00005.
+f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 bce,dice
+loss=0.09659. acc=0.96324. bce=0.03627. jaccard=0.88634. dice=0.93968. tversky=0.94226. focal=0.00003.
+f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 bce,tversky(a=0.8,b=0.2)
+loss=0.10795. acc=0.95802. bce=0.05153. jaccard=0.85508. dice=0.92179. tversky=0.94357. focal=0.00007.
+f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 bce,tversky(a=0.3,b=0.7)
+loss=0.10010. acc=0.96004. bce=0.03877. jaccard=0.87769. dice=0.93483. tversky=0.93867. focal=0.00003.
+f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 bce,focal(a=0.5,g=2)
+loss=0.03409. acc=0.96187. bce=0.03407. jaccard=0.84334. dice=0.91495. tversky=0.91354. focal=0.00002.  seemed to have less fn
+
+loss w jaccard
+f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 jaccard,dice
+loss=0.16821. acc=0.96159. bce=0.09619. jaccard=0.89002. dice=0.94177. tversky=0.92057. focal=0.00044.  had some more fp
+f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 jaccard,tversky(a=0.3,b=0.7)
+loss=0.16268. acc=0.96110. bce=0.10575. jaccard=0.89472. dice=0.94438. tversky=0.94260. focal=0.00058.
+f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 jaccard,tversky(a=0.3,b=0.7)
+loss=0.15258. acc=0.96210. bce=0.08420. jaccard=0.90025. dice=0.94747. tversky=0.94717. focal=0.00028.
+f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 jaccard,tversky(a=0.2,b=0.8)
+loss=0.15286. acc=0.96091. bce=0.09035. jaccard=0.89953. dice=0.94706. tversky=0.94761. focal=0.00036.
+f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 jaccard,tversky(a=0.1,b=0.9)
+loss=0.15949. acc=0.95972. bce=0.10471. jaccard=0.89066. dice=0.94214. tversky=0.94984. focal=0.00056.
+f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 jaccard,tversky(a=0.0,b=1.0)
+loss=0.17008. acc=0.95784. bce=0.13885. jaccard=0.87864. dice=0.93538. tversky=0.95128. focal=0.00120.
+f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 jaccard,focal(a=0.5,g=2)
+loss=0.11394. acc=0.95927. bce=0.08753. jaccard=0.88639. dice=0.93973. tversky=0.93294. focal=0.00033.  bad fn
+
+
+
+
+
+
+
+
+
