@@ -43,23 +43,21 @@ class LiveSegmentDataset(Dataset):
 
 def visualize_dataloader(dataloader):
     from torchvision.utils import make_grid
-    num_rows, num_cols = 8, 8
     out = None
-    for images, masks in dataloader:
-        # print(images.shape, masks.shape)
-        # print(dataloader.dataset.gen.bkg_count)
-        if out == None:
-            out = images
-        else:
-            out = torch.cat((out, images), 0)
-        print(out.shape[0])
-        if out.shape[0] > num_rows*num_cols:
+    nrows = 6
+    rows = []
+    for i in range(nrows):
+        row = []
+        for images, masks in dataloader:
+            for i in range(images.shape[0]):
+                row.append(images[i].detach().cpu().numpy().transpose(1, 2, 0))
             break
-    fig, ax = plt.subplots(figsize=(num_rows, num_cols))
-    ax.set_xticks([]); ax.set_yticks([])
-    ax.imshow(make_grid((out.detach()[:num_rows*num_cols]), nrow=num_rows).permute(1, 2, 0))
-    plt.show()
-    fig.savefig('images/segment_processed.png', bbox_inches='tight')
+        rows.append( np.hstack(row) )
+    grid_img = np.vstack(rows) * 255
+    print(grid_img.shape)
+    im = Image.fromarray(grid_img.astype('uint8'), 'RGB')
+    im.show()
+    im.save("images/segment_processed.png")
 
 
 def dataset_stats(dataset, num=1000):
@@ -98,11 +96,11 @@ def time_dataloader(dataset, batch_size=64, max_num_workers=8, num=4096):
         train_loader = DataLoader(
             dataset=dataset, batch_size=batch_size, shuffle=True,
             num_workers=i, drop_last=True, persistent_workers=(True if i >0 else False))
-        t0 = time.time()
         max_ram = 0
         ts = time.time()
         [_ for _ in train_loader]
         print(time.time()-ts)
+        t0 = time.time()
         for batch_idx, (data, target) in enumerate(train_loader):
             r = psutil.virtual_memory()[3]
             if r > max_ram:
@@ -119,13 +117,12 @@ def time_dataloader(dataset, batch_size=64, max_num_workers=8, num=4096):
 
 if __name__ == "__main__":
 
-    input_size = 256
+    input_size = 400
 
-    num_epochs = 2
-    train_size = 1024
-    batch_size = 4
+    train_size = 256
+    batch_size = 8
     shuffle = False
-    num_workers = 4
+    num_workers = 0
     drop_last = True
 
     dataset_folder = None #'images/classify1'  # root directory that has images and labels.csv, if None targets are made during the training
@@ -166,8 +163,8 @@ if __name__ == "__main__":
     # im = T.ToPILImage(mode='RGB')(x)
     # im.show()
 
-    visualize_dataloader(train_loader)
+    # visualize_dataloader(train_loader)  # use batch_size = 8
 
-    # dataset_stats(train_dataset, num=800)
+    # dataset_stats(train_dataset, num=1000)
 
-    # time_dataloader(train_dataset, batch_size=4, max_num_workers=8, num=1024)
+    time_dataloader(train_dataset, batch_size=8, max_num_workers=8, num=1024)

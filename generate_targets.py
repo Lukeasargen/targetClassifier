@@ -1,5 +1,6 @@
 import os
 import random
+import time
 from typing import Sequence
 
 import numpy as np
@@ -40,9 +41,12 @@ class TargetGenerator():
         self.target_transforms = target_transforms
         self.bkg_path = bkg_path
         if bkg_path:
+            print(" * Loading background images.")
             self.bkg_count = 0  # Track when all backgrounds are used and then reset
             # TODO : resize to save memory???
-            self.backgrounds = [pil_loader(os.path.join(os.getcwd(), bkg_path, x)) for x in os.listdir(bkg_path)]  # list of pil images
+            ts = time.time()
+            self.backgrounds = [pil_loader(os.path.join(os.getcwd(), x)) for x in os.scandir(bkg_path) if not x.is_dir()]  # list of pil images
+            print("Background load time: {:.03f} seconds.".format(time.time()-ts))
             self.bkg_choices = list(range(len(self.backgrounds)))  # List of indices that is looped through to select images in self.backgrounds
             np.random.shuffle(self.bkg_choices)
 
@@ -382,7 +386,7 @@ class TargetGenerator():
         if target_size == None:
             target_size = self.target_size
         if fill_prob == None:
-            fill_prob = 0.5
+            fill_prob = self.fil
         if bkg_path == None:
             bkg_path = self.bkg_path
 
@@ -399,7 +403,7 @@ class TargetGenerator():
         max_num = min(scale_w, scale_h)
         # print("max_num :", max_num)
 
-        num = np.random.randint(2, max_num) if max_num>2 else 1 # Divisions along the smallest dimension
+        num = np.random.randint(1, max_num) if max_num>1 else 1 # Divisions along the smallest dimension
         # print("num :", num)
 
         # Scale divisions two both axis
@@ -475,17 +479,17 @@ def visualize_classify(gen):
     print(grid_img.shape)
     im = Image.fromarray(grid_img.astype('uint8'), 'RGB')
     im.show()
-    im.save("images/visualize_classify.jpeg")
+    im.save("images/visualize_classify.png")
 
 
 def visualize_segment(gen):
-    nrows = 4
-    ncols = 2
+    nrows = 5
+    ncols = 3
     rows = []
     for i in range(nrows):
         row = []
         for j in range(ncols):
-            img, mask = gen.gen_segment(input_size=(512, 512), target_size=20, fill_prob=0.5)
+            img, mask = gen.gen_segment(input_size=(400, 400), target_size=20, fill_prob=0.5)
             row.append(img)
             row.append(mask)
         rows.append( np.hstack(row) )
@@ -506,7 +510,7 @@ if __name__ == "__main__":
     expansion_factor = 3  # generate higher resolution targets and downscale, improves aliasing effects
 
     target_tranforms = T.Compose([
-        T.RandomPerspective(distortion_scale=0.4, p=1.0, interpolation=Image.BICUBIC),
+        T.RandomPerspective(distortion_scale=0.5, p=1.0, interpolation=Image.BICUBIC),
     ])
 
     # create the generator object
@@ -520,9 +524,9 @@ if __name__ == "__main__":
 
     # visualize_classify(gen)
 
-    img, mask = gen.gen_segment(input_size=(1024, 1024), target_size=20, fill_prob=0.5)
+    img, mask = gen.gen_segment(input_size=(400, 400), target_size=20, fill_prob=0.5)
     out = Image.fromarray(np.hstack([np.asarray(img), np.asarray(mask)]))
-    out.show()
-    out.save("images/seg_example.jpg")
+    # out.show()
+    # out.save("images/seg_example.jpg")
 
     # visualize_segment(gen)

@@ -14,13 +14,7 @@ Write the wide resnet with support for:
 
 Write training script for feature extractor
 
-Create custom sampler
-
-Training experiments
-
 Start training with few augmentations (flipping and color)
-    activation functions
-    batchnorm and spectral norm
     
 Add augmentations (cropping, scaling, ratio, rotation, perspective)
     fixed stride downsampling w global avg vs spaital pyramidal pooling
@@ -36,22 +30,10 @@ Start using linear classifiers for each task
 
 DATA
 
-Change the orientation label to only correspond to the letter
-
-Image dataset : Any aerial image datsets
-    https://www.iuii.ua.es/datasets/masati/
-
-
 ACHITECTURE
-Wide residual network : https://arxiv.org/pdf/1605.07146.pdf
-
 Spectral Normalization Layers : https://arxiv.org/pdf/1802.05957.pdf
     Wraps around conv and linear Layers
     Keep the batchnorm
-
-Different Activations
-    Mish
-    Leaky relu a=0.2
 
 
 Adaptable input scaling
@@ -73,10 +55,6 @@ TRAINING
 Weight decay
     5e-4 is a good start for wide resnets
     lower to 1e-4 if using stronger augmentations
-
-Cosine annealing learning rates : https://arxiv.org/pdf/1608.03983.pdf
-    iterations = len(dataloader) * num_epochs
-    step after each optimizer step
 
 Use MSE and CrossEntropy
 
@@ -128,7 +106,9 @@ Nested Unet : https://arxiv.org/pdf/1807.10165.pdf
 
 - save segmentation dataset as files
 - write dataloader for segmentation folder
+Lovasz hinge loss with elu + 1
 
+improve augmentations
 
 Gen
 - fixed the star generator, use a single polygon

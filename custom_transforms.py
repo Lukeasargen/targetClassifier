@@ -8,6 +8,9 @@ from torch.utils.data import Dataset, DataLoader  # Building custom datasets
 import torchvision.transforms as T  # Image processing
 import torchvision.transforms.functional as TF  # Image processing
 
+from helper import pil_loader
+
+
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 
@@ -57,14 +60,27 @@ class RandomSharpness(torch.nn.Module):
 class CustomTransformation(torch.nn.Module):
     def __init__(self):
         super().__init__()
-        self.gaussian = RandomGaussianBlur(p=0.5)
-        self.gamma = RandomGamma(p=0.5)
-        self.brightness = RandomBrightness(p=0.5)
-        self.sharpen = RandomSharpness(p=0.1)
+        self.gaussian = RandomGaussianBlur(p=1.0)
+        self.gamma = RandomGamma(p=1.0)
+        self.brightness = RandomBrightness(p=1.0)
+        self.sharpen = RandomSharpness(p=1.0)
 
     def forward(self, img):
-        img = self.gaussian(img)
+        # img = self.gaussian(img)
         img = self.gamma(img)
-        img = self.brightness(img)
-        img = self.sharpen(img)
+        # img = self.brightness(img)
+        # img = self.sharpen(img)
         return img
+
+
+if __name__ == "__main__":
+
+    sample_path = "dev/visualize_classify.png"
+    sample_img = pil_loader(sample_path)    
+
+    transform = CustomTransformation()
+
+    out = transform(sample_img)
+
+    out.show()
+    

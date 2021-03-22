@@ -158,11 +158,11 @@ def time_dataloader(dataset, batch_size=64, max_num_workers=8, num=4096):
         train_loader = DataLoader(
             dataset=dataset, batch_size=batch_size, shuffle=True,
             num_workers=i, drop_last=True, persistent_workers=(True if i >0 else False))
-        t0 = time.time()
         max_ram = 0
         ts = time.time()
         [_ for _ in train_loader]
         print(time.time()-ts)
+        t0 = time.time()
         for batch_idx, (data, target) in enumerate(train_loader):
             r = psutil.virtual_memory()[3]
             if r > max_ram:

@@ -62,9 +62,57 @@ f=16 maxpool relu ts=256 bs=16 lr=0.1,[14,20],24,0.1 m=0.9 wd=5e-4 jaccard,focal
 loss=0.11394. acc=0.95927. bce=0.08753. jaccard=0.88639. dice=0.93973. tversky=0.93294. focal=0.00033.  bad fn
 
 
+optimizer: AdamW with Milestone Scheduler
+SGD seems to work everytime with the right lr schedule
+RMSProp needs lower learning rate, 1e-3 is a good start, higher dice than SGD
+Adam, 4e-3 does work, higher dice than RMSProp, better than RMSProp near the end of training, might do better with small gradients than RMSProp
+AdamW, 4e-3, wd=5e-4 better dice than Adam
+
+scheduler:
+ReduceLROnPlateau patience=10 SGD lr=1e-1 wd=5e-4 m=0.9
+steps at 75, 94, 105, 116, dice of 0.972 is very high
 
 
 
+run00556_final - same training as old unet
+
+run00596_final - convergence, dice loss, google
+loss=0.02526. acc=0.96340. bce=0.04161. jaccard=0.95074. dice=0.97474. tversky=0.97347. focal=0.00004.
+run00597_final - convergence, bce and dice loss, dota
+loss=0.05909. acc=0.96345. bce=0.02326. jaccard=0.93093. dice=0.96417. tversky=0.96294. focal=0.00001.
+run00598_final - convergence, dice loss, dota
+loss=0.03214. acc=0.96855. bce=0.04825. jaccard=0.93783. dice=0.96786. tversky=0.96520. focal=0.00008.
+run00599_final - convergence, dice loss, dota google
+loss=0.02761. acc=0.96850. bce=0.03990. jaccard=0.94631. dice=0.97239. tversky=0.97054. focal=0.00004.
+run00600_final - convergence, dice loss, dota google, filters=32
+loss=0.02574. acc=0.96897. bce=0.04028. jaccard=0.94985. dice=0.97426. tversky=0.97040. focal=0.00004.
+
+
+
+filters
+605 f=2 maxpool relu ts=256 bs=8 plateau 300 lr=0.1,p=80,g=0.2 m=0.9 wd=5e-4 dice
+Total params: 30,751 Params size (MB): 0.12
+loss=0.07610. acc=0.95982. bce=0.09423. jaccard=0.85926. dice=0.92390. tversky=0.92183. focal=0.00063.
+
+607 f=4 maxpool relu ts=256 bs=8 plateau 300 lr=0.1,p=50,g=0.2 m=0.9 wd=5e-4 dice
+Total params: 122,093 Params size (MB): 0.47
+loss=0.05514. acc=0.96581. bce=0.08372. jaccard=0.89583. dice=0.94486. tversky=0.94213. focal=0.00033.
+
+608 f=8 maxpool relu ts=256 bs=8 plateau 300 lr=0.1,p=50,g=0.2 m=0.9 wd=5e-4 dice
+Total params: 486,553 Params size (MB): 1.86
+loss=0.03380. acc=0.96777. bce=0.04980. jaccard=0.93476. dice=0.96620. tversky=0.96057. focal=0.00013.
+
+609 f=16 maxpool relu ts=256 bs=8 plateau 300 lr=0.1,p=50,g=0.2 m=0.9 wd=5e-4 dice
+Total params: 1,942,577 Params size (MB): 7.41
+loss=0.03020. acc=0.96886. bce=0.04543. jaccard=0.94144. dice=0.96980. tversky=0.96523. focal=0.00005.
+
+610 f=32 maxpool relu ts=256 bs=8 plateau 300 lr=0.1,p=50,g=0.2 m=0.9 wd=5e-4 dice
+Total params: 7,763,041 Params size (MB): 29.61
+loss=0.02704. acc=0.96466. bce=0.04487. jaccard=0.94741. dice=0.97296. tversky=0.96951. focal=0.00005.
+
+612 f=64 maxpool relu ts=256 bs=8 step 180 lr=0.1,[120, 160],0.2 m=0.9 wd=5e-4 dice
+Total params: 31,037,633 Params size (MB): 118.40
+loss=0.02431. acc=0.96897. bce=0.03472. jaccard=0.95257. dice=0.97569. tversky=0.97262. focal=0.00002.
 
 
 
