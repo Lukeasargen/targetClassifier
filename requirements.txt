@@ -1,8 +1,5 @@
 matplotlib
 opencv-python
-pandas
 tensorboard
 torchsummary
-scikit-learn
-scipy
-seaborn
+pytorch_model_summary

@@ -44,9 +44,18 @@ if __name__ == "__main__":
     # data = torch.rand((1, 3, input_size, input_size))
     # model_time(model, data, n_trials=100, device=device)
 
+
     from models.unet import UNet
-    model = UNet(in_channels=3, out_channels=1, filters=16)
+    model_type = 'unet' # unet, unet_nested
+    input_size = 256
+    in_channels = 3
+    out_channels = 1
+    filters = 16
+    activation = 'silu'  # relu, leaky_relu, silu, mish
+
+    model = UNet(in_channels, out_channels, model_type, filters, activation).to(device)
+    batch = 4
     input_size = 400
-    data = torch.rand((1, 3, input_size, input_size))
-    model_time(model, data, n_trials=200, device=device)
+    data = torch.rand((batch, in_channels, input_size, input_size))
+    model_time(model, data, n_trials=300, device=device)
 

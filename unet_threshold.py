@@ -21,17 +21,16 @@ if __name__ == "__main__":
     ])
     train_dataset = LiveSegmentDataset(length=256,
         input_size=input_size, target_size=20,
-        expansion_factor=3, bkg_path='backgrounds', fill_prob=0.5,
+        expansion_factor=3, bkg_path='backgrounds/validate', fill_prob=0.5,
         target_transforms=target_transforms)
     
     # Load new model
-    model, data = load_unet(path="runs/unet/run00599_final.pth", device=device)
+    model = load_unet(path="runs/unet/run00631_final.pth", device=device)
     model.eval()
     transforms = T.Compose([
         T.Resize((input_size)),  # Make shortest edge this size
         T.CenterCrop(input_size),
         T.ToTensor(),
-        T.Normalize(mean=data['mean'], std=data['std'])
     ])
     
     transform_mask = T.Compose([T.Grayscale(num_output_channels=1), T.ToTensor()])

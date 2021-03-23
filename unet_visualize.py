@@ -14,6 +14,7 @@ def load_old_unet(path, device):
     checkpoint = torch.load(path, map_location=device)
     model.load_state_dict(checkpoint['model'])
     model.eval()
+    # TODO : did this model use input normalization
     set_mean = [0.4792167,  0.52474296, 0.27591285]
     set_std = [0.17430544, 0.15489028, 0.151296  ]
     transforms = T.Compose([
@@ -24,11 +25,10 @@ def load_old_unet(path, device):
 
 
 def load_unet_regular(path, device):
-    model, data = load_unet(path=path, device=device)
+    model = load_unet(path=path, device=device)
     model.eval()
     transforms = T.Compose([
         T.ToTensor(),
-        T.Normalize(mean=data['mean'], std=data['std'])
     ])
     return model, transforms
 
@@ -40,10 +40,9 @@ if __name__ == "__main__":
     threshold = 0.5
 
     # Dataset parameters
-    train_size = 256
     input_size = 400
     bkg_path = 'backgrounds/validate'
-    target_size = 200  # Smallest target size
+    target_size = 20  # Smallest target size
     fill_prob = 1.0
     expansion_factor = 3  # generate higher resolution targets and downscale, improves aliasing effects
     target_transforms = T.Compose([
@@ -55,11 +54,11 @@ if __name__ == "__main__":
 
     # Load old model
     first_model, first_transforms = load_old_unet("dev/old_unet_weights.pth", device)
-    # first_model, first_transforms = load_unet_regular("runs/unet/run00612_final.pth", device)
+    # first_model, first_transforms = load_unet_regular("runs/unet/run00631_final.pth", device)
 
-    # Load new model    
-    # second_model, second_transforms = load_unet_regular("runs/unet/run00556_final.pth", device)
-    second_model, second_transforms = load_unet_regular("runs/unet/run00609_final.pth", device)
+    # Load new model
+    second_model, second_transforms = load_unet_regular("runs/unet/run00633_final.pth", device)
+    # second_model, second_transforms = load_unet_regular("runs/unet/run00631_final.pth", device)
 
     # Create the visual
     nrows = 4

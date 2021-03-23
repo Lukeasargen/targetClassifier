@@ -75,6 +75,7 @@ steps at 75, 94, 105, 116, dice of 0.972 is very high
 
 
 run00556_final - same training as old unet
+loss=0.02474. acc=0.96562. bce=0.03923. jaccard=0.95174. dice=0.97525. tversky=0.97347. focal=0.00003.
 
 run00596_final - convergence, dice loss, google
 loss=0.02526. acc=0.96340. bce=0.04161. jaccard=0.95074. dice=0.97474. tversky=0.97347. focal=0.00004.
@@ -113,6 +114,113 @@ loss=0.02704. acc=0.96466. bce=0.04487. jaccard=0.94741. dice=0.97296. tversky=0
 612 f=64 maxpool relu ts=256 bs=8 step 180 lr=0.1,[120, 160],0.2 m=0.9 wd=5e-4 dice
 Total params: 31,037,633 Params size (MB): 118.40
 loss=0.02431. acc=0.96897. bce=0.03472. jaccard=0.95257. dice=0.97569. tversky=0.97262. focal=0.00002.
+
+
+613 f=16 maxpool relu ts=256 bs=8 adamw plateau 400 lr=4e-3,p=60,g=0.2 m=0.9 wd=5e-4 dice,focal
+loss=0.02766. acc=0.96640. bce=0.09295. jaccard=0.94771. dice=0.97313. tversky=0.96900. focal=0.00079.
+
+614 f=16 maxpool relu ts=256 bs=8 adam plateau 400 lr=4e-3,p=60,g=0.2 m=0.9 wd=5e-4 dice,focal
+loss=0.02927. acc=0.96588. bce=0.09636. jaccard=0.94497. dice=0.97166. tversky=0.96698. focal=0.00093.
+
+615 f=16 maxpool relu ts=256 bs=8 sgd plateau 400 lr=1e-2,p=60,g=0.2 m=0.9 wd=5e-4 jaccard
+loss=0.06874. acc=0.96394. bce=0.05970. jaccard=0.93126. dice=0.96437. tversky=0.95847. focal=0.00011.
+
+# try stride again, not good
+621 f=16 stride=2 relu bn ts=256 bs=8 sgd plateau 400 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
+loss=0.03424. acc=0.96556. bce=0.05634. jaccard=0.93396. dice=0.96576. tversky=0.96035. focal=0.00012.
+622 f=16 stride=2 leaky=0.2 bn ts=256 bs=8 sgd plateau 400 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
+loss=0.03022. acc=0.96949. bce=0.04681. jaccard=0.94140. dice=0.96978. tversky=0.96529. focal=0.00006.
+
+
+# try silu and mish
+617 f=16 maxpool relu bn ts=256 bs=8 sgd plateau 400 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
+loss=0.02622. acc=0.96856. bce=0.04235. jaccard=0.94893. dice=0.97378. tversky=0.97054. focal=0.00004.
+618 f=16 maxpool leaky=0.2 bn ts=256 bs=8 sgd plateau 400 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
+loss=0.04031. acc=0.96316. bce=0.05693. jaccard=0.92278. dice=0.95969. tversky=0.95566. focal=0.00012.
+619 f=16 maxpool wo/act bn ts=256 bs=8 sgd plateau 400 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
+loss=0.08059. acc=0.95679. bce=0.14606. jaccard=0.85116. dice=0.91941. tversky=0.90907. focal=0.00144.
+629 f=16 maxpool silu bn ts=256 bs=8 sgd plateau 400 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
+loss=0.07031. acc=0.96191. bce=0.11538. jaccard=0.86914. dice=0.92969. tversky=0.92182. focal=0.00076.
+630 f=16 maxpool mish bn ts=256 bs=8 sgd plateau 400 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
+loss=0.02850. acc=0.96828. bce=0.04215. jaccard=0.94461. dice=0.97150. tversky=0.96729. focal=0.00004.
+
+
+
+All models after 631 use the new encoder decode structure
+
+model speed
+unet relu
+For model.train() :
+  Duration 2.908486 s. Seconds per input=0.009695 s. FPS=103.1465
+For model.eval() :
+  Duration 1.302212 s. Seconds per input=0.004341 s. FPS=230.3772
+For no_grad() :
+  Duration 1.210975 s. Seconds per input=0.004037 s. FPS=247.7343
+
+unet leaky_relu
+For model.train() :
+  Duration 2.879618 s. Seconds per input=0.009599 s. FPS=104.1805
+For model.eval() :
+  Duration 1.282200 s. Seconds per input=0.004274 s. FPS=233.9729
+For no_grad() :
+  Duration 1.205205 s. Seconds per input=0.004017 s. FPS=248.9203
+
+unet silu
+For model.train() :
+  Duration 2.750110 s. Seconds per input=0.009167 s. FPS=109.0865
+For model.eval() :
+  Duration 1.201743 s. Seconds per input=0.004006 s. FPS=249.6374
+For no_grad() :
+  Duration 1.101027 s. Seconds per input=0.003670 s. FPS=272.4728
+
+unet mish
+For model.train() :
+  Duration 3.233173 s. Seconds per input=0.010777 s. FPS=92.7881
+For model.eval() :
+  Duration 1.595617 s. Seconds per input=0.005319 s. FPS=188.0151
+For no_grad() :
+  Duration 1.480682 s. Seconds per input=0.004936 s. FPS=202.6094
+
+unet_nested relu
+For model.train() :
+  Duration 5.125511 s. Seconds per input=0.025628 s. FPS=39.0205
+For model.eval() :
+  Duration 3.002429 s. Seconds per input=0.015012 s. FPS=66.6127
+For no_grad() :
+  Duration 2.903672 s. Seconds per input=0.014518 s. FPS=68.8783
+
+unet_nested leaky_relu
+For model.train() :
+  Duration 5.075989 s. Seconds per input=0.025380 s. FPS=39.4012
+For model.eval() :
+  Duration 2.950129 s. Seconds per input=0.014751 s. FPS=67.7937
+For no_grad() :
+  Duration 2.861528 s. Seconds per input=0.014308 s. FPS=69.8927
+
+unet_nested silu
+For model.train() :
+  Duration 7.179935 s. Seconds per input=0.023933 s. FPS=41.7831
+For model.eval() :
+  Duration 4.167573 s. Seconds per input=0.013892 s. FPS=71.9843
+For no_grad() :
+  Duration 4.060991 s. Seconds per input=0.013537 s. FPS=73.8736
+
+unet_nested mish
+For model.train() :
+  Duration 8.037341 s. Seconds per input=0.026791 s. FPS=37.3258
+For model.eval() :
+  Duration 4.969029 s. Seconds per input=0.016563 s. FPS=60.3740
+For no_grad() :
+  Duration 4.875986 s. Seconds per input=0.016253 s. FPS=61.5260
+
+both take a long time to converge with silu and mish
+
+
+634 unet_nested f=16 maxpool relu bn ts=256 bs=8 sgd plateau 100 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
+Duration=9.73 minutes. loss=0.04949. acc=0.96355. bce=0.06985. jaccard=0.90708. dice=0.95051. tversky=0.93938. focal=0.00073.
+635 unet f=16 maxpool relu bn ts=256 bs=8 sgd plateau 100 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
+Duration=4.72 minutes. loss=0.06385. acc=0.96186. bce=0.10081. jaccard=0.88162. dice=0.93615. tversky=0.92592. focal=0.00108.
+
 
 
 

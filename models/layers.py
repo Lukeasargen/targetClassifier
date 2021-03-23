@@ -3,6 +3,19 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
+def get_act(name):
+    if name == 'relu':
+        return nn.ReLU(inplace=True)
+    elif name == 'leaky_relu':
+        return nn.LeakyReLU(negative_slope=0.2, inplace=True)
+    elif name == 'swish':
+        return nn.SiLU(inplace=True)
+    elif name == 'mish':
+        return MishInline()
+    else:
+        return nn.Identity()
+
+
 class MishInline(nn.Module):
     """ https://arxiv.org/abs/1908.08681v1 """
     def __init__(self):
@@ -10,20 +23,6 @@ class MishInline(nn.Module):
 
     def forward(self, x):
         return x * torch.tanh( F.softplus(x) )
-
-
-@torch.jit.script
-def mish(x):
-    ''' https://github.com/digantamisra98/Mish/blob/master/Mish/Torch/functional.py '''
-    return x * torch.tanh( F.softplus(x) )
-
-class Mish(nn.Module):
-    '''https://github.com/digantamisra98/Mish/blob/master/Mish/Torch/mish.py '''
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x):
-        return mish(x)
 
 
 class DepthwiseSeparableConv2d(nn.Module):

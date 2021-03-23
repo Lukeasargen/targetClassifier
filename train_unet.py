@@ -17,6 +17,8 @@ from dataset_segment import LiveSegmentDataset
 from logger import Logger
 from metrics import pixel_accuracy, jaccard_iou, dice_coeff, tversky_measure, focal_metric
 
+from models.unet import UNet, save_unet
+    
 
 def view_outputs(model, train_dataset, threshold=0.5):
     model.eval()
@@ -79,7 +81,8 @@ if __name__ == "__main__":
     # Training data
     graph_metrics = True
     view_results = True
-    view_threshold = 0.9
+    save_final = True
+    view_threshold = 0.5
     metrics_tracked = [
         'acc',
         'bce',
@@ -90,18 +93,19 @@ if __name__ == "__main__":
     ]  # calculated in metrics()
 
     # Model Config
-    model_type = "unet"  # unet
+    model_type = "unet"  # unet, unet_nested
     input_size = 256 # 400
     in_channels = 3
     out_channels = 1
-    unet_filters = 64  # 16
+    unet_filters = 16  # 16
+    activation = 'relu' # relu, leaky_relu, silu, mish
 
     # Training Hyperparameters
-    num_epochs = 180  # 20
+    num_epochs = 100  # 20
     train_size = 256 # 8000
     batch_size = 8 # 4
     shuffle = False
-    num_workers = 8
+    num_workers = 5
     drop_last = False
 
     # Optimization
@@ -110,7 +114,7 @@ if __name__ == "__main__":
     momentum = 0.9  # 0.9
     nesterov = True
     weight_decay = 5e-4  # 0, 1e-5, 3e-5, *1e-4, 3e-4, *5e-4, 3e-4, 1e-3, 1e-2
-    scheduler_type = 'step'  # step, plateau
+    scheduler_type = 'plateau'  # step, plateau
     lr_milestones = [120, 160]  # for StepLR, [10, 15]
     lr_gamma = 0.2  # for StepLR, 0.2
     plateau_patience = 50
@@ -120,21 +124,17 @@ if __name__ == "__main__":
     target_size = 20  # Smallest target size
     fill_prob = 0.9
     expansion_factor = 1  # generate higher resolution targets and downscale, improves aliasing effects
-
     set_mean = [0, 0, 0]
     set_std = [1, 1, 1]
-
     target_transforms = T.Compose([
         T.RandomPerspective(distortion_scale=0.5, p=1.0, interpolation=Image.BICUBIC),
     ])
     train_transforms = T.Compose([
         CustomTransformation(),
         T.ToTensor(),
-        T.Normalize(mean=set_mean, std=set_std)
     ])
     val_transforms = T.Compose([
         T.ToTensor(),
-        T.Normalize(mean=set_mean, std=set_std)
     ])
     
     # Prepare datasets
@@ -153,11 +153,7 @@ if __name__ == "__main__":
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     print('device :', device)
 
-    if model_type == "unet":
-        from models.unet import UNet, save_unet
-        model = UNet(in_channels, out_channels, unet_filters).to(device)
-        save_model = save_unet
-
+    model = UNet(in_channels, out_channels, model_type, unet_filters, activation, set_mean, set_std).to(device)
 
     # Uncomment to test the model before training
     # view_outputs(model, train_dataset, threshold=0.5); exit()
@@ -262,7 +258,8 @@ if __name__ == "__main__":
     print("loss={:.05f}. acc={:.05f}. bce={:.05f}. jaccard={:.05f}. dice={:.05f}. tversky={:.05f}. focal={:.05f}.".format(epoch_metrics["train_loss"], epoch_metrics["acc"], epoch_metrics["bce"], epoch_metrics["jaccard"], epoch_metrics["dice"], epoch_metrics["tversky"], epoch_metrics["focal"]))
     
     # Save Model
-    save_model(model, save_path(current_run, "final"), set_mean, set_std)
+    if save_final:
+        save_unet(model, save_path(current_run, "final"))
 
 
     if view_results:

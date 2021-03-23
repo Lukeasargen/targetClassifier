@@ -143,8 +143,8 @@ class BasicResnet(nn.Module):
 
     def set_normalization(self, mean=[0.0, 0.0, 0.0], std=[1.0, 1.0, 1.0]):
         self.normalize.reset_parameters()
-        self.normalize.running_mean = torch.tensor(mean, requires_grad=False)
-        self.normalize.running_var = torch.tensor([x**2 for x in std], requires_grad=False)
+        self.normalize.running_mean = torch.tensor(mean, requires_grad=False, dtype=torch.float)
+        self.normalize.running_var = torch.tensor([x**2 for x in std], requires_grad=False, dtype=torch.float)
         self.normalize.weight.requires_grad = False  # gamma
         self.normalize.bias.requires_grad = False   # beta
         self.normalize.running_mean.requires_grad = False  # mean
@@ -161,7 +161,7 @@ class BasicResnet(nn.Module):
         return self
 
     def forward(self, x, dropout=0.0):
-        out = self.normalize(x)
+        out = self.normalize().eval()(X)
         out = self.first_layer(out)
         for idx in range(self.num_blocks):
             out = eval("self.Block" + str(idx))(out)

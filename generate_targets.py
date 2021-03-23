@@ -386,7 +386,7 @@ class TargetGenerator():
         if target_size == None:
             target_size = self.target_size
         if fill_prob == None:
-            fill_prob = self.fil
+            fill_prob = 0.5
         if bkg_path == None:
             bkg_path = self.bkg_path
 
