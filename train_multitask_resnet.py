@@ -18,31 +18,15 @@ from custom_transforms import CustomTransformation
 from dataset_classify import LiveClassifyDataset, FolderClassifyDataset
 from logger import Logger
 from models.multitask import BuildMultiTaskResnet, save_multitask_resnet
+from metrics import WeightedTaskLoss
+
 
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 
-class WeightedTaskLoss(nn.Module):
-    """ https://arxiv.org/abs/1705.07115 """
-    def __init__(self, num_tasks):
-        super(WeightedTaskLoss, self).__init__()
-        self.num_tasks = num_tasks
-        self.sigma = nn.Parameter(torch.ones(num_tasks))
-        self.mse = nn.MSELoss()
-        self.cel = nn.CrossEntropyLoss()
-        self.ones = nn.Parameter(torch.ones(num_tasks), requires_grad=False)
-
-    def forward(self, output, target):
-        loss = 0
-        for i in range(self.num_tasks):
-            y = target[i]  # get task target, a tensor of scalars
-            if target.ndim != 1:  # check for multiple task target
-                y = target[:, i]  # target is a tensor of indices
-            if output[i].shape[1] == 1:  # output is a scalar not class logits
-                loss += (0.5*self.mse(output[i].squeeze(), y)/self.sigma[i]**2) + torch.log(self.sigma[i])
-            else:  # class cross entropy loss
-                loss += self.cel(output[i] / self.sigma[i]**2, y.long())
-        return loss
+def multi_class_loss(output, target):
+    loss_func = nn.CrossEntropyLoss()
+    return loss_func(output, target)
 
 
 def get_correct_multi_class(output, target):
@@ -51,15 +35,12 @@ def get_correct_multi_class(output, target):
     return correct
 
 def get_correct_scalar(output, target, *args):
+    """ Called in the train loop """
     output = output.squeeze()
     return scalar_correct(output, target, *args)
 
 def scalar_correct(output, target, scalar_threshold):
     return (torch.abs(output-target) < scalar_threshold).sum().item()
-
-def multi_class_loss(output, target):
-    loss_func = nn.CrossEntropyLoss()
-    return loss_func(output, target)
 
 def scalar_loss(output, target):
     """ Loss function when the output is a scalar (not a class distribution). """
@@ -92,7 +73,7 @@ if __name__ == "__main__" and '__file__' in globals():
     validate = False
     val_size = 2048
     val_batch_size = 256
-    num_workers = 8
+    num_workers = 4
     shuffle = True
     drop_last = True  # Does multiprocessing handle this well?
     base_lr = 6e-2
@@ -510,6 +491,6 @@ if __name__ == "__main__" and '__file__' in globals():
 
         fig.tight_layout()  # otherwise the right y-label is slightly clipped
 
-        fig.savefig("images/runs/multitask/run_{:05d}.png".format(current_run), bbox_inches='tight')
+        fig.savefig("runs/multitask/run_{:05d}.png".format(current_run), bbox_inches='tight')
 
         plt.show()

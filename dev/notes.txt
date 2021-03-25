@@ -15,33 +15,5 @@ letter_color: 94.1%
 # better
 .detach()  #doesn't transfer gpu memory, remove graph attatched to the variable
 
+unet graph: conda install python-graphviz
 
-Unet
-arguments
-input channels
-output channels
-filters, length is the number of downsamples
-pad, boolean, False does true convolution and crops the skip connections
-forward pass needs dropout during downsampling
-kernel size on the downsample, changes the crop
-
-experiments
-padding vs true convolution
-activation on the transpose convolution
-maxpooling vs stride=2
-
-
-
-
-def visualize(image , actual , pred):
-  fig,ax = plt.subplots()
-  ax.imshow(denormalize(image))
-  ax.grid(False)
-  classes =  np.array(classLabels)[np.array(actual,dtype=np.bool)]
-  for i , s in enumerate(classes):
-    ax.text(0 , i*20  , s , verticalalignment='top', color="white", fontsize=16, weight='bold')
-  classes =  np.array(classLabels)[np.array(pred,dtype=np.bool)]
-  for i , s in enumerate(classes):
-    ax.text(160 , i*20  , s , verticalalignment='top', color="black", fontsize=16, weight='bold')
-  plt.show()
-visualize(image[1] , label[1].tolist() , output[1].tolist())

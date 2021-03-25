@@ -161,7 +161,12 @@ if __name__ == "__main__":
                 filters, blocks, bottleneck, groups, width_per_group)
 
     model.set_normalization(mean=[0.5, 0.4, 0.3], std=[0.1, 0.2, 0.3])
+    model.to(device)
 
+    x = torch.randn(1, in_channels, input_size, input_size).to(device)
+    # out = model(x)
+    # print(out)
+    
     # print(model)
     summary(model.to(device), (in_channels, input_size, input_size))
 
