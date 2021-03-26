@@ -457,7 +457,7 @@ if __name__ == "__main__" and '__file__' in globals():
             '#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf'
         ]
 
-        fig, ax = plt.subplots(2, 2)
+        fig, ax = plt.subplots(2, 2, figsize=(12,8))  # w, h
 
         color = 'tab:red'
         ax[0][0].set_xlabel('epochs', fontsize=16)
@@ -491,6 +491,6 @@ if __name__ == "__main__" and '__file__' in globals():
 
         fig.tight_layout()  # otherwise the right y-label is slightly clipped
 
-        fig.savefig("runs/multitask/run_{:05d}.png".format(current_run), bbox_inches='tight')
+        fig.savefig("runs/multitask/run{:05d}_metrics.png".format(current_run), bbox_inches='tight')
 
         plt.show()

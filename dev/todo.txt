@@ -58,7 +58,6 @@ Weight decay
 
 Use MSE and CrossEntropy
 
-
 Augmentations
     Try some used in YOLOv4 : https://arxiv.org/pdf/2004.10934.pdf
 
@@ -69,17 +68,11 @@ Change the Orientation classifier to use Hyperbolic neural networks
 
 
 PRETRAINING
-
 Feature extractor
     dataset - colored minist, stl10, imagenet downsampled (32, 64)
     Same output features everytime, pyramidal Pooling
-
 Fine tuning classifiers
-    Initialization - try xvaier, standard normal var=0.02
-    Must have batchnorm, branching type archecture to handle scaling
-        Xception, fix the output width
     Lower learning rate than PRETRAINING
-    Cosine annealing
 
 
 Adversarial Training
@@ -101,8 +94,6 @@ Evaluation
 
 
 Segementation
-
-Nested Unet : https://arxiv.org/pdf/1807.10165.pdf
 
 - save segmentation dataset as files
 - write dataloader for segmentation folder

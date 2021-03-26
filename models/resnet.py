@@ -161,7 +161,7 @@ class BasicResnet(nn.Module):
         return self
 
     def forward(self, x, dropout=0.0):
-        out = self.normalize().eval()(X)
+        out = self.normalize.eval()(x)
         out = self.first_layer(out)
         for idx in range(self.num_blocks):
             out = eval("self.Block" + str(idx))(out)
@@ -280,11 +280,12 @@ if __name__ == "__main__":
 
     model = wide_resnet16_8(num_classes=10)
     model.set_normalization(mean=[0.5, 0.4, 0.3], std=[0.1, 0.2, 0.3])
-    model = model.to(device)
+    model.to(device)
 
-    # x = torch.ones((1, in_channels, input_size, input_size)).to(device)
-    # y = model(x)
-    summary(model, (in_channels, input_size, input_size))
+    x = torch.ones((1, in_channels, input_size, input_size)).to(device)
+    y = model(x)
+
+    # summary(model, (in_channels, input_size, input_size))
 
     # print("Convolutional Layers:", count_convs(model))
 
