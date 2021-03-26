@@ -132,7 +132,7 @@ loss=0.03424. acc=0.96556. bce=0.05634. jaccard=0.93396. dice=0.96576. tversky=0
 loss=0.03022. acc=0.96949. bce=0.04681. jaccard=0.94140. dice=0.96978. tversky=0.96529. focal=0.00006.
 
 
-# try silu and mish
+# Activations, relu and mish did best
 617 f=16 maxpool relu bn ts=256 bs=8 sgd plateau 400 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
 loss=0.02622. acc=0.96856. bce=0.04235. jaccard=0.94893. dice=0.97378. tversky=0.97054. focal=0.00004.
 618 f=16 maxpool leaky=0.2 bn ts=256 bs=8 sgd plateau 400 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
@@ -146,74 +146,7 @@ loss=0.02850. acc=0.96828. bce=0.04215. jaccard=0.94461. dice=0.97150. tversky=0
 
 
 
-All models after 631 use the new encoder decode structure
-
-model speed
-unet relu
-For model.train() :
-  Duration 2.908486 s. Seconds per input=0.009695 s. FPS=103.1465
-For model.eval() :
-  Duration 1.302212 s. Seconds per input=0.004341 s. FPS=230.3772
-For no_grad() :
-  Duration 1.210975 s. Seconds per input=0.004037 s. FPS=247.7343
-
-unet leaky_relu
-For model.train() :
-  Duration 2.879618 s. Seconds per input=0.009599 s. FPS=104.1805
-For model.eval() :
-  Duration 1.282200 s. Seconds per input=0.004274 s. FPS=233.9729
-For no_grad() :
-  Duration 1.205205 s. Seconds per input=0.004017 s. FPS=248.9203
-
-unet silu
-For model.train() :
-  Duration 2.750110 s. Seconds per input=0.009167 s. FPS=109.0865
-For model.eval() :
-  Duration 1.201743 s. Seconds per input=0.004006 s. FPS=249.6374
-For no_grad() :
-  Duration 1.101027 s. Seconds per input=0.003670 s. FPS=272.4728
-
-unet mish
-For model.train() :
-  Duration 3.233173 s. Seconds per input=0.010777 s. FPS=92.7881
-For model.eval() :
-  Duration 1.595617 s. Seconds per input=0.005319 s. FPS=188.0151
-For no_grad() :
-  Duration 1.480682 s. Seconds per input=0.004936 s. FPS=202.6094
-
-unet_nested relu
-For model.train() :
-  Duration 5.125511 s. Seconds per input=0.025628 s. FPS=39.0205
-For model.eval() :
-  Duration 3.002429 s. Seconds per input=0.015012 s. FPS=66.6127
-For no_grad() :
-  Duration 2.903672 s. Seconds per input=0.014518 s. FPS=68.8783
-
-unet_nested leaky_relu
-For model.train() :
-  Duration 5.075989 s. Seconds per input=0.025380 s. FPS=39.4012
-For model.eval() :
-  Duration 2.950129 s. Seconds per input=0.014751 s. FPS=67.7937
-For no_grad() :
-  Duration 2.861528 s. Seconds per input=0.014308 s. FPS=69.8927
-
-unet_nested silu
-For model.train() :
-  Duration 7.179935 s. Seconds per input=0.023933 s. FPS=41.7831
-For model.eval() :
-  Duration 4.167573 s. Seconds per input=0.013892 s. FPS=71.9843
-For no_grad() :
-  Duration 4.060991 s. Seconds per input=0.013537 s. FPS=73.8736
-
-unet_nested mish
-For model.train() :
-  Duration 8.037341 s. Seconds per input=0.026791 s. FPS=37.3258
-For model.eval() :
-  Duration 4.969029 s. Seconds per input=0.016563 s. FPS=60.3740
-For no_grad() :
-  Duration 4.875986 s. Seconds per input=0.016253 s. FPS=61.5260
-
-both take a long time to converge with silu and mish
+# All models after 631 use the new encoder decode structure
 
 
 634 unet_nested f=16 maxpool relu bn ts=256 bs=8 sgd plateau 100 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
@@ -222,6 +155,71 @@ Duration=9.73 minutes. loss=0.04949. acc=0.96355. bce=0.06985. jaccard=0.90708. 
 Duration=4.72 minutes. loss=0.06385. acc=0.96186. bce=0.10081. jaccard=0.88162. dice=0.93615. tversky=0.92592. focal=0.00108.
 
 
+638 in=256 unet_nested f=16 maxpool relu bn ts=256 bs=8 sgd plateau 100 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
+Duration=36.05 minutes. loss=0.02477. acc=0.96771. bce=0.03840. jaccard=0.95168. dice=0.97523. tversky=0.97250. focal=0.00003.
+
+
+# Models after 668 use deep supervision
+
+
+# model speed
+unet f16 relu in=256
+For model.train() : Latency=4.26 ms. FPS=234.7397
+For model.eval() : Latency=2.70 ms. FPS=371.0574
+For predict() : Latency=2.56 ms. FPS=390.6249
+
+unet f16 leaky_relu in=256
+For model.train() : Latency=4.31 ms. FPS=231.9075
+For model.eval() : Latency=2.73 ms. FPS=366.3003
+For predict() : Latency=2.52 ms. FPS=397.4167
+
+unet f16 silu in=256
+For model.train() : Latency=4.06 ms. FPS=246.4305
+For model.eval() : Latency=2.44 ms. FPS=409.8362
+For predict() : Latency=2.29 ms. FPS=436.1993
+
+unet f16 mish in=256
+For model.train() : Latency=4.95 ms. FPS=201.9182
+For model.eval() : Latency=3.32 ms. FPS=300.8651
+For predict() : Latency=2.91 ms. FPS=343.2004
+
+unet_nested f16 relu in=256
+For model.train() : Latency=10.33 ms. FPS=96.7849
+For model.eval() : Latency=6.37 ms. FPS=157.0114
+For predict() : Latency=6.31 ms. FPS=158.3540
+
+unet_nested f16 leaky_relu in=256
+For model.train() : Latency=10.30 ms. FPS=97.1109
+For model.eval() : Latency=6.36 ms. FPS=157.2636
+For predict() : Latency=6.27 ms. FPS=159.6167
+
+unet_nested f16 silu in=256
+For model.train() : Latency=10.08 ms. FPS=99.2311
+For model.eval() : Latency=6.19 ms. FPS=161.5089
+For predict() : Latency=6.08 ms. FPS=164.4035
+
+unet_nested f16 mish in=256
+For model.train() : Latency=11.21 ms. FPS=89.1696
+For model.eval() : Latency=7.28 ms. FPS=137.4119
+For predict() : Latency=7.17 ms. FPS=139.5294
+
+
+
+
+# Test with 8 filters
+ in=256 unet f=8 maxpool relu bn ts=256 bs=8 sgd plateau 200 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
+
+ in=256 unet_nested f=8 maxpool relu bn ts=256 bs=8 sgd plateau 100 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
+
+
+
+
+# Batch size
+
+
+
+
+# fill probability
 
 
 

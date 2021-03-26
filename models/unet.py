@@ -141,6 +141,10 @@ class UNetNestedDecoder(nn.Module):
         self.up22 = Up(filters[3]*2, filters[2], activation=activation)
         self.up13 = Up(filters[2]*3, filters[1], activation=activation)
         self.up04 = Up(filters[1]*4, filters[0], activation=activation)
+        # Deep supervision
+        self.ds01 = nn.Conv2d(filters[0]*2, out_channels, kernel_size=1)
+        self.ds02 = nn.Conv2d(filters[0]*3, out_channels, kernel_size=1)
+        self.ds03 = nn.Conv2d(filters[0]*4, out_channels, kernel_size=1)
         # Out
         # self.out = DoubleConv(filters[0]*5, out_channels)
         self.out = nn.Conv2d(filters[0]*5, out_channels, kernel_size=1)
@@ -161,19 +165,29 @@ class UNetNestedDecoder(nn.Module):
         x22 = torch.cat([x21, self.up22(x21, x31)], dim=1)
         x13 = torch.cat([x12, self.up13(x12, x22)], dim=1)
         x04 = torch.cat([x03, self.up04(x03, x13)], dim=1)
-        return self.out(x04)
+        l4 = self.out(x04)
+        # Deep supervision
+        l1 = self.ds01(x01)
+        l2 = self.ds02(x02)
+        l3 = self.ds03(x03)
+        # Use all logits for training, use mean for inference
+        if self.training:
+            out = [l1, l2, l3, l4]
+        else:
+            out = torch.mean(torch.cat([l1, l2, l3, l4], dim=1), dim=1, keepdim=True)
+        return out
 
 
 class UNet(nn.Module):
-    def __init__(self, in_channels, out_channels, model_type='unet', filters=64, 
+    def __init__(self, in_channels=3, out_channels=1, model_type='unet', filters=16, 
                 activation='relu', mean=[0,0,0], std=[1,1,1]):
         super(UNet, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.model_type = model_type
         self.filters = filters
-        self.model_args = {"in_channels": in_channels, "out_channels": out_channels,
-            "model_type": model_type, "filters": filters, "activation": activation}
+        self.model_args = {"in_channels": in_channels, "out_channels": out_channels,  # mean and std are saved as parameters
+            "model_type": model_type, "filters": filters, "activation": activation} 
         if type(filters) == int:
             filters = [filters, filters*2, filters*4, filters*8, filters*16]
 
@@ -214,68 +228,79 @@ class UNet(nn.Module):
         x = self.normalize.eval()(x)
         features = self.encoder(x)
         logits = self.decoder(features)
-        return torch.sigmoid(logits)
-
+        return logits
+    
+    def predict(self, x):
+        self.eval()
+        with torch.no_grad():
+            logits = self.forward(x)
+            return torch.sigmoid(logits)
 
 
 
 def train_test(model, device):
+    batch = 2
     model.to(device).train()
-    x = torch.randn(1, 3, 256, 256).to(device)
-    y = torch.randn(1, 1, 256, 256).to(device)
-    citerion = nn.BCELoss()
-    opt = torch.optim.SGD(model.parameters(), lr=1e-2)
-    for i in range(100):
+    x = torch.randn(batch, model.in_channels, 64, 64).to(device)
+    y = torch.ones(batch, model.out_channels, 64, 64).to(device)
+    opt = torch.optim.SGD(model.parameters(), lr=1e-1)
+    for i in range(10):
         opt.zero_grad()
-        pred = model(x)
-        loss = citerion(pred, y)
+        logits = model(x)
+        loss = 0.0
+        if type(logits)==list:
+            for l in logits:
+                loss += nn.BCEWithLogitsLoss()(l, y)
+        else:
+            loss = nn.BCEWithLogitsLoss()(logits, y)
         loss.backward()
         opt.step()
         print(loss.item())
-
 
 
 if __name__ == "__main__":
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-    model_type = 'unet' # unet, unet_nested
-    input_size = 256
     in_channels = 3
     out_channels = 1
-    filters = 16
-    activation = 'relu'  # relu, leaky_relu, silu, mish
+    model_type = "unet_nested"  # unet, unet_nested
+    filters = 16  # 16
+    activation = "relu"  # relu, leaky_relu, silu, mish
+
+    input_size = 64
 
     model = UNet(in_channels, out_channels, model_type, filters, activation).to(device)
 
+    # train_test(model, device)
 
-    # print(model)
+    x = torch.randn(1, in_channels, input_size, input_size).to(device)
+
+    out = model.predict(x)
+    print("predict :", out.shape, torch.min(out).item(), torch.max(out).item())
 
 
-    # x = torch.randn(1, in_channels, input_size, input_size).to(device)
-    # out = model(x)
-    # print(out.shape, torch.min(out).item(), torch.max(out).item())
-
-
-    train_test(model, device)
-
+    # from torchviz import make_dot
+    # dot = make_dot(model(x), params=dict(list(model.named_parameters()) + [('x', x)]))
+    # dot.format = 'png'
+    # dot.render(f'images/{model_type}_graph')
 
     # save_unet(model, save_path="runs/unet_test.pth")
     # model2 = load_unet("runs/unet_test.pth", device=device)
-    # out2 = model2(x)
-    # print(out2.shape, torch.min(out2).item(), torch.max(out2).item())
+    # out = model2(x)
+    # print(out.shape, torch.min(out).item(), torch.max(out).item())
 
 
     # from torchsummary import summary
     # summary(model.to(device), (in_channels, input_size, input_size))
 
-    # from pytorch_model_summary import summary  # git clone https://github.com/amarczew/pytorch_model_summary.git
-    # summary(model,
-    #         torch.zeros(1, in_channels, input_size, input_size).to(device),
-    #         batch_size=1,
-    #         show_input=False,  # Input shape or output shape
-    #         show_hierarchical=False, 
-    #         print_summary=True,  # calls print before returning
-    #         max_depth=3,  # None searchs max depth
-    #         show_parent_layers=True
-    #         )
+    from pytorch_model_summary import summary  # git clone https://github.com/amarczew/pytorch_model_summary.git
+    summary(model,
+            torch.zeros(1, in_channels, input_size, input_size).to(device),
+            batch_size=1,
+            show_input=False,  # Input shape or output shape
+            show_hierarchical=False, 
+            print_summary=True,  # calls print before returning
+            max_depth=1,  # None searchs max depth
+            show_parent_layers=True
+            )

@@ -5,7 +5,6 @@ import torch
 import torchvision.transforms as T  # Image processing
 
 from generate_targets import TargetGenerator
-from models.old_unet import old_UNet
 from models.unet import load_unet
 
 
@@ -43,7 +42,7 @@ if __name__ == "__main__":
     input_size = 400
     bkg_path = 'backgrounds/validate'
     target_size = 20  # Smallest target size
-    fill_prob = 1.0
+    fill_prob = 0.6
     expansion_factor = 3  # generate higher resolution targets and downscale, improves aliasing effects
     target_transforms = T.Compose([
         T.RandomPerspective(distortion_scale=0.5, p=1.0, interpolation=Image.BICUBIC),
@@ -53,12 +52,12 @@ if __name__ == "__main__":
                 target_transforms=target_transforms, bkg_path=bkg_path)
 
     # Load old model
-    first_model, first_transforms = load_old_unet("dev/old_unet_weights.pth", device)
-    # first_model, first_transforms = load_unet_regular("runs/unet/run00631_final.pth", device)
+    # first_model, first_transforms = load_unet_regular("runs/unet/run00636_final.pth", device)
+    first_model, first_transforms = load_unet_regular("runs/unet_nested/run00673_final.pth", device)
 
     # Load new model
-    second_model, second_transforms = load_unet_regular("runs/unet/run00633_final.pth", device)
-    # second_model, second_transforms = load_unet_regular("runs/unet/run00631_final.pth", device)
+    # second_model, second_transforms = load_unet_regular("runs/unet/run00636_final.pth", device)
+    second_model, second_transforms = load_unet_regular("runs/unet_nested/run00651_final.pth", device)
 
     # Create the visual
     nrows = 4
@@ -72,9 +71,8 @@ if __name__ == "__main__":
             first_img = first_transforms(img).to(device).unsqueeze(0)
             second_img = second_transforms(img).to(device).unsqueeze(0)
 
-            with torch.no_grad():
-                first_out = first_model(first_img).detach().cpu().numpy()
-                second_out = second_model(second_img).detach().cpu().numpy()
+            first_out = first_model.predict(first_img).detach().cpu().numpy()
+            second_out = second_model.predict(second_img).detach().cpu().numpy()
 
             row.append(img)
 
@@ -96,9 +94,11 @@ if __name__ == "__main__":
             row.append(second_fp_mask*img)
             row.append(second_fn_mask*img)
 
+            row.append(np.logical_xor(second_preds, first_preds)*255)
+
         rows.append( np.hstack(row) )
     grid_img = np.vstack(rows)
     # print(grid_img.shape)
     im = Image.fromarray(grid_img.astype('uint8'), 'RGB')
     im.show()
-    im.save("images/unet_visualize_old_new.png")
+    im.save("images/unet_visualize.png")

@@ -8,30 +8,28 @@ def model_time(model, data, n_trials=10, device='cpu'):
     model = model.to(device)
     data = data.to(device)
 
+    print("For model.train() : ", end="")
     model.train()
     t0 = time.time()
     for i in range(n_trials):
         yhat = model(data)
     duration = time.time() - t0
-    print("For model.train() :")
-    print("  Duration {:.6f} s. Seconds per input={:.6f} s. FPS={:.4f}".format(duration, duration/n_trials, n_trials/duration))
+    print("Latency={:.2f} ms. FPS={:.4f}".format(1000*duration/n_trials, n_trials/duration))
 
+    print("For model.eval() : ", end="")
     model.eval()
     t0 = time.time()
     for i in range(n_trials):
         yhat = model(data)
     duration = time.time() - t0
-    print("For model.eval() :")
-    print("  Duration {:.6f} s. Seconds per input={:.6f} s. FPS={:.4f}".format(duration, duration/n_trials, n_trials/duration))
+    print("Latency={:.2f} ms. FPS={:.4f}".format(1000*duration/n_trials, n_trials/duration))
 
-
+    print("For predict() : ", end="")
     t0 = time.time()
-    with torch.no_grad():
-        for i in range(n_trials):
-            yhat = model(data)
+    for i in range(n_trials):
+        yhat = model.predict(data)
     duration = time.time() - t0
-    print("For no_grad() :")
-    print("  Duration {:.6f} s. Seconds per input={:.6f} s. FPS={:.4f}".format(duration, duration/n_trials, n_trials/duration))
+    print("Latency={:.2f} ms. FPS={:.4f}".format(1000*duration/n_trials, n_trials/duration))
 
 
 if __name__ == "__main__":
@@ -46,16 +44,16 @@ if __name__ == "__main__":
 
 
     from models.unet import UNet
-    model_type = 'unet' # unet, unet_nested
-    input_size = 256
+    model_type = 'unet_nested' # unet, unet_nested
     in_channels = 3
     out_channels = 1
     filters = 16
-    activation = 'silu'  # relu, leaky_relu, silu, mish
+    activation = 'relu'  # relu, leaky_relu, silu, mish
+
+    input_size = 256
+    batch = 1
 
     model = UNet(in_channels, out_channels, model_type, filters, activation).to(device)
-    batch = 4
-    input_size = 400
     data = torch.rand((batch, in_channels, input_size, input_size))
-    model_time(model, data, n_trials=300, device=device)
+    model_time(model, data, n_trials=800, device=device)
 
