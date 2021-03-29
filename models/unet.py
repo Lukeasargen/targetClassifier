@@ -48,12 +48,11 @@ class DoubleConv(nn.Module):
                 stride=1, padding=1, activation=None):
         super().__init__()
         act_func = get_act(activation)
-        bias = False if activation else True
         self.double_conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=bias),
+            nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, bias=False),
             nn.BatchNorm2d(out_channels),
             act_func,
-            nn.Conv2d(out_channels, out_channels, kernel_size=kernel_size, stride=1, padding=padding, bias=bias),
+            nn.Conv2d(out_channels, out_channels, kernel_size=kernel_size, stride=1, padding=padding, bias=False),
             nn.BatchNorm2d(out_channels),
             act_func
         )
@@ -125,8 +124,9 @@ class UNetDecoder(nn.Module):
 
 
 class UNetNestedDecoder(nn.Module):
-    def __init__(self, out_channels, filters, activation):
+    def __init__(self, out_channels, filters, activation, deep=False):
         super(UNetNestedDecoder, self).__init__()
+        self.deep = deep
         # L1
         self.up01 = Up(filters[1], filters[0], activation=activation)
         # L2
@@ -142,11 +142,11 @@ class UNetNestedDecoder(nn.Module):
         self.up13 = Up(filters[2]*3, filters[1], activation=activation)
         self.up04 = Up(filters[1]*4, filters[0], activation=activation)
         # Deep supervision
-        self.ds01 = nn.Conv2d(filters[0]*2, out_channels, kernel_size=1)
-        self.ds02 = nn.Conv2d(filters[0]*3, out_channels, kernel_size=1)
-        self.ds03 = nn.Conv2d(filters[0]*4, out_channels, kernel_size=1)
+        if deep:
+            self.ds01 = nn.Conv2d(filters[0]*2, out_channels, kernel_size=1)
+            self.ds02 = nn.Conv2d(filters[0]*3, out_channels, kernel_size=1)
+            self.ds03 = nn.Conv2d(filters[0]*4, out_channels, kernel_size=1)
         # Out
-        # self.out = DoubleConv(filters[0]*5, out_channels)
         self.out = nn.Conv2d(filters[0]*5, out_channels, kernel_size=1)
 
     def forward(self, features):
@@ -165,16 +165,17 @@ class UNetNestedDecoder(nn.Module):
         x22 = torch.cat([x21, self.up22(x21, x31)], dim=1)
         x13 = torch.cat([x12, self.up13(x12, x22)], dim=1)
         x04 = torch.cat([x03, self.up04(x03, x13)], dim=1)
-        l4 = self.out(x04)
+        out = self.out(x04)
         # Deep supervision
-        l1 = self.ds01(x01)
-        l2 = self.ds02(x02)
-        l3 = self.ds03(x03)
-        # Use all logits for training, use mean for inference
-        if self.training:
-            out = [l1, l2, l3, l4]
-        else:
-            out = torch.mean(torch.cat([l1, l2, l3, l4], dim=1), dim=1, keepdim=True)
+        if self.deep:
+            l1 = self.ds01(x01)
+            l2 = self.ds02(x02)
+            l3 = self.ds03(x03)
+            # Use all logits for training, use mean for inference
+            if self.training:
+                out = [l1, l2, l3, out]
+            else:
+                out = torch.mean(torch.cat([l1, l2, l3, out], dim=1), dim=1, keepdim=True)
         return out
 
 
@@ -196,11 +197,13 @@ class UNet(nn.Module):
 
         self.encoder = UNetEncoder(in_channels, out_channels, filters, activation)
 
-        assert model_type in ['unet', 'unet_nested']
+        assert model_type in ['unet', 'unet_nested', 'unet_nested_deep']
         if model_type == 'unet':
             self.decoder = UNetDecoder(out_channels, filters, activation)
         elif model_type == 'unet_nested':
             self.decoder = UNetNestedDecoder(out_channels, filters, activation)
+        elif model_type == 'unet_nested_deep':
+            self.decoder = UNetNestedDecoder(out_channels, filters, activation, deep=True)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -231,7 +234,6 @@ class UNet(nn.Module):
         return logits
     
     def predict(self, x):
-        self.eval()
         with torch.no_grad():
             logits = self.forward(x)
             return torch.sigmoid(logits)
@@ -264,7 +266,7 @@ if __name__ == "__main__":
 
     in_channels = 3
     out_channels = 1
-    model_type = "unet_nested"  # unet, unet_nested
+    model_type = "unet_nested_deep"  # unet, unet_nested, unet_nested_deep
     filters = 16  # 16
     activation = "relu"  # relu, leaky_relu, silu, mish
 

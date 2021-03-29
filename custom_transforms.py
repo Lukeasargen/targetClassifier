@@ -14,6 +14,18 @@ from helper import pil_loader
 os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
 
 
+class AddGaussianNoise(torch.nn.Module):
+    def __init__(self, mean=0.0, std=0.01):
+        self.std = std
+        self.mean = mean
+        
+    def __call__(self, tensor):
+        return tensor + torch.randn(tensor.size()) * self.std + self.mean
+    
+    def __repr__(self):
+        return self.__class__.__name__ + '(mean={0}, std={1})'.format(self.mean, self.std)
+
+
 class RandomGaussianBlur(torch.nn.Module):
     def __init__(self, p=0.0):
         super().__init__()

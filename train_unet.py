@@ -1,6 +1,7 @@
 
 import os
 import time
+from typing import List
 
 from collections import Counter
 import matplotlib.pyplot as plt
@@ -9,11 +10,12 @@ from PIL import Image
 import torch  # Tensor library
 import torch.nn as nn  # loss functinos
 import torch.optim as optim  # Optimization and schedulers
+import torch.nn.functional as F
 from torch.utils.data import DataLoader  # Building custom datasets
 import torchvision.transforms as T  # Image processing
 from torch.cuda import amp
 
-from custom_transforms import CustomTransformation
+from custom_transforms import CustomTransformation, AddGaussianNoise
 from dataset_segment import LiveSegmentDataset
 from logger import Logger
 from metrics import pixel_accuracy, jaccard_iou, dice_coeff, tversky_measure, focal_metric
@@ -28,7 +30,7 @@ def view_outputs(model, train_dataset, threshold=0.5):
     for i in range(nrows):
         row = []
         for j in range(ncols):
-            img, mask = train_dataset.gen.gen_segment(fill_prob=0.3)
+            img, mask = train_dataset.gen.gen_segment(fill_prob=0.4)
             x = val_transforms(img).to(device).unsqueeze(0)
             out = model.predict(x).detach().cpu().numpy()
             preds = (np.repeat(out[0][:, :, :], 3, axis=0).transpose(1, 2, 0) > threshold)
@@ -46,51 +48,38 @@ def view_outputs(model, train_dataset, threshold=0.5):
     im.save("images/unet_train_demo.png")
 
 
-def calc_loss(logits, targets):
-    # bce_loss = nn.BCEWithLogitsLoss()(logits, targets)
-    # focal_loss = focal_metric(logits, targets, alpha=0.5, gamma=2)
+@torch.jit.script
+def calc_loss(logits: torch.Tensor, targets: torch.Tensor):
+    # bce_loss = F.binary_cross_entropy_with_logits(logits, targets)
+    # focal_loss = focal_metric(logits, targets, alpha=0.5, gamma=2.0)
 
     preds = torch.sigmoid(logits)
-    # jaccard_loss = 1 - jaccard_iou(preds, targets, smooth=1)
-    dice_loss = 1 - dice_coeff(preds, targets, smooth=1)
-    # tversky_loss = 1 - tversky_measure(preds, targets, alpha=0.3, beta=0.7, smooth=1)
+    # jaccard_loss = 1 - jaccard_iou(preds, targets, smooth=1.0)
+    dice_loss = 1.0 - dice_coeff(preds, targets, smooth=1.0)
+    # tversky_loss = 1 - tversky_measure(preds, targets, alpha=0.3, beta=0.7, smooth=1.0)
 
     loss = dice_loss
     return loss
 
 
-def loss_func(logits, targets):
-    loss = 0.0
-    if type(logits)==list:
-        for l in logits:
-            loss += calc_loss(l, targets)
-    else:
-        loss = calc_loss(logits, targets)
+@torch.jit.script
+def loss_func(logits: List[torch.Tensor], targets: torch.Tensor):
+    loss = torch.tensor(0.0, device=targets.device)
+    for l in logits:
+        loss += calc_loss(l, targets)
     return loss
 
 
-def calc_metrics(logits, targets, metrics_tracked=[]):
-    metrics = {}
-
-    if type(logits) == list:
-        logits = torch.mean(torch.cat(logits, dim=1), dim=1, keepdim=True)
-
-    bce_loss = nn.BCEWithLogitsLoss()(logits, targets)
-    focal_loss = focal_metric(logits, targets, alpha=0.5, gamma=2)
-
+def calc_metrics(logits: torch.Tensor, targets: torch.Tensor):
     preds = torch.sigmoid(logits)
-    acc = pixel_accuracy(preds, targets, threshold=0.5)
-    jaccard = jaccard_iou(preds, targets, smooth=1)
-    diceCoeff = dice_coeff(preds, targets, smooth=1)
-    tversky = tversky_measure(preds, targets, alpha=0.3, beta=0.7, smooth=1)
-
-    if 'acc' in metrics_tracked: metrics.update({"acc": acc.item()})
-    if 'bce' in metrics_tracked: metrics.update({"bce": bce_loss.item()})
-    if 'jaccard' in metrics_tracked: metrics.update({"jaccard": jaccard.item()})
-    if 'dice' in metrics_tracked: metrics.update({"dice": diceCoeff.item()})
-    if 'tversky' in metrics_tracked: metrics.update({"tversky": tversky.item()})
-    if 'focal' in metrics_tracked: metrics.update({"focal": focal_loss.item()})
-
+    metrics = {
+        "acc": pixel_accuracy(preds, targets, threshold=0.5).item(),
+        "bce": F.binary_cross_entropy_with_logits(logits, targets).item(),
+        "jaccard": jaccard_iou(preds, targets, smooth=1.0).item(),
+        "dice": dice_coeff(preds, targets, smooth=1.0).item(),
+        "tversky": tversky_measure(preds, targets, alpha=0.3, beta=0.7, smooth=1.0).item(),
+        "focal": focal_metric(logits, targets, alpha=0.5, gamma=2.0).item()
+    }
     return metrics
 
 
@@ -101,32 +90,23 @@ if __name__ == "__main__":
     np.random.seed(MANUAL_SEED)
 
     # Training data
-    graph_metrics = False
-    view_results = False
+    graph_metrics = True
+    view_results = True
     save_final = True
     view_threshold = 0.5
-    metrics_tracked = [
-        'acc',
-        'bce',
-        'jaccard',
-        'dice',
-        'tversky',
-        'focal'
-    ]  # calculated in metrics()
 
     # Model Config
     in_channels = 3
     out_channels = 1
-    model_type = "unet_nested"  # unet, unet_nested
+    model_type = "unet"  # unet, unet_nested, unet_nested_deep
     filters = 16  # 16
     activation = "relu"  # relu, leaky_relu, silu, mish
 
-
     # Training Hyperparameters
-    input_size = 256 # 400
-    num_epochs = 5  # 20
+    input_size = 192 # 400
+    num_epochs = 200 # 20
     train_size = 256 # 8000
-    batch_size = 8 # 4
+    batch_size = 64 # 4
     shuffle = False
     num_workers = 4
     drop_last = False
@@ -140,13 +120,13 @@ if __name__ == "__main__":
     momentum = 0.9  # 0.9
     nesterov = True
     weight_decay = 5e-4  # 0, 1e-5, 3e-5, *1e-4, 3e-4, *5e-4, 3e-4, 1e-3, 1e-2
-    scheduler_type = 'step'  # step, plateau
-    lr_milestones = [45, 49]  # for StepLR, [10, 15]
-    lr_gamma = 0.2  # for StepLR, 0.2
-    plateau_patience = 50
+    scheduler_type = 'step'  # step, plateau, exp
+    lr_milestones = [110, 160]  # for StepLR, [10, 15]
+    lr_gamma = 0.2
+    plateau_patience = 60
 
     # Dataset parameters
-    bkg_path = 'backgrounds/validate'  # path to background images, None is a random color background
+    bkg_path = 'backgrounds'  # path to background images, None is a random color background
     target_size = 20  # Smallest target size
     fill_prob = 0.9
     expansion_factor = 1  # generate higher resolution targets and downscale, improves aliasing effects
@@ -158,6 +138,7 @@ if __name__ == "__main__":
     train_transforms = T.Compose([
         CustomTransformation(),
         T.ToTensor(),
+        AddGaussianNoise(std=0.04)
     ])
     val_transforms = T.Compose([
         T.ToTensor(),
@@ -203,6 +184,8 @@ if __name__ == "__main__":
         scheduler = optim.lr_scheduler.MultiStepLR(optimizer, milestones=lr_milestones, gamma=lr_gamma)
     elif scheduler_type == 'plateau':
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=lr_gamma, patience=plateau_patience, verbose=True)
+    elif scheduler_type == 'exp':
+        scheduler = optim.lr_scheduler.ExponentialLR(optimizer, gamma=lr_gamma)
     else:
         scheduler = None
 
@@ -211,7 +194,7 @@ if __name__ == "__main__":
         scalar = amp.GradScaler()
 
     # Setup run data
-    base_save = f"runs/{model_type}"
+    base_save = f"runs/unet"
     save_path = lambda r, t : base_save + '/run{:05d}_{}.pth'.format(r, t)
     if not os.path.exists(base_save):
         os.makedirs(base_save)
@@ -230,7 +213,8 @@ if __name__ == "__main__":
 
     # Create logger
     log_name = "run{:05d}".format(current_run)
-    log_headers = ['epoch', 'iterations', 'elapsed_time', 'lr', 'train_loss'] + metrics_tracked
+    log_headers = ['epoch', 'iterations', 'elapsed_time', 'lr', 'train_loss',
+                    'acc', 'bce', 'jaccard', 'dice', 'tversky', 'focal']
     logger = Logger(name=log_name, headers=log_headers, folder=base_save)
 
     run_stats = []
@@ -248,26 +232,29 @@ if __name__ == "__main__":
             data = data.to(device=device)
             true_masks = true_masks.to(device=device)
 
-            optimizer.zero_grad()
+            optimizer.zero_grad(set_to_none=False)  # TODO : set to true and test each optimizer
 
             if use_amp:
                 with amp.autocast():
                     logits = model(data)
+                    if type(logits) != list: logits = [logits]
                     loss = loss_func(logits, true_masks)
                     scalar.scale(loss).backward()
                     scalar.step(optimizer)
                     scalar.update()
             else:
                 logits = model(data)
+                if type(logits) != list: logits = [logits]
                 loss = loss_func(logits, true_masks)
                 loss.backward()
 
-            # nn.utils.clip_grad_value_(model.parameters(), 0.1)
             optimizer.step()
             iterations += 1
 
             # Update running metrics
-            batch_metrics = calc_metrics(logits, true_masks, metrics_tracked)
+            if type(logits) == list:
+                logits = torch.mean(torch.cat(logits, dim=1), dim=1, keepdim=True)
+            batch_metrics = calc_metrics(logits, true_masks)
             epoch_loss_total += loss.item()
             batch_metrics_total += Counter(batch_metrics)
 
@@ -298,9 +285,9 @@ if __name__ == "__main__":
 
     # END TRAIN LOOP
 
-    print('Finished Training. Duration={}. {} iterations'.format(time_to_string(time.time()-t0), iterations))
+    print('Finished Training. Duration={}. {} iterations.'.format(time_to_string(time.time()-t0), iterations))
     print("Final stats:")
-    print("loss={:.05f}. acc={:.05f}. bce={:.05f}. jaccard={:.05f}. dice={:.05f}. tversky={:.05f}. focal={:.05f}.".format(epoch_metrics["train_loss"], epoch_metrics["acc"], epoch_metrics["bce"], epoch_metrics["jaccard"], epoch_metrics["dice"], epoch_metrics["tversky"], epoch_metrics["focal"]))
+    print("loss={:.05f}. acc={:.05f}. bce={:.05f}. jaccard={:.05f}. dice={:.05f}. tversky={:.05f}. focal={:.06f}.".format(epoch_metrics["train_loss"], epoch_metrics["acc"], epoch_metrics["bce"], epoch_metrics["jaccard"], epoch_metrics["dice"], epoch_metrics["tversky"], epoch_metrics["focal"]))
     
     # Save Model
     if save_final:

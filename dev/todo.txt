@@ -1,3 +1,11 @@
+
+
+
+segment improve augmentations
+
+Gen- fixed the star generator, use a single polygon
+
+
 Papers to read
     Representation Learning: A Review and New Perspectives - Onenote
     How transferable are features in deep neural networks? - https://arxiv.org/abs/1411.1792
@@ -99,9 +107,5 @@ Segementation
 - write dataloader for segmentation folder
 Lovasz hinge loss with elu + 1
 
-improve augmentations
-
-Gen
-- fixed the star generator, use a single polygon
 
 

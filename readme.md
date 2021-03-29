@@ -99,7 +99,7 @@ Example of the metrics from a single training run:
 
 ![multitask_resnet_run](/images/readme/multitask_resnet_run.png)
 
-The sigma value can be thought of as the variance of the output predictions. The learning rate of sigma is 1000 times less than the rest of the model. This was decided by experimentation. Increasing or decreasing from 1000 negatively effects some of the tasks.
+The sigma value can be thought of as the variance of the output predictions. The learning rate of sigma is 400 times less than the rest of the model. This was decided by experimentation. Increasing or decreasing from 400 negatively effects some of the tasks.
 
 Here is an example of training with the sigma learning rate too high:
 
@@ -109,9 +109,7 @@ Here is an example of training with the sigma learning rate too low:
 
 ![sigma_too_low](/images/readme/sigma_too_low.png)
 
-Even though the model converges for all reasonable values of the sigma learning rate, 1000 times less gives good results summarized in the table below.
-
-### Classification Accuracy
+Even though the model converges for all reasonable values of the sigma learning rate, 400 times less gives good results summarized in the table below. The values are percent correct on a validation set.
 | Sigma Learning Rate | Orientation | Shape | Letter | Shape Color | Letter Color |
 |-|-|-|-|-|-|
 | lr/1 | 87.93 | 98.22 | 95.50 | 99.94 | 97.63 |
@@ -126,13 +124,13 @@ Even though the model converges for all reasonable values of the sigma learning 
 
 ## Classification Model 2 - Multitask Resnet (2 Stages)
 
-The only differance from this and model 1 is the training. A samll grid search will be used to determine which features can be improved when learned jointly. For example, learning orienation and letter is likely to boost training since the feature learned by the letter classifier can be used to classify the orientation of the letter. It is also assumed shape can be learned with letter and orientation since all tasks use patterns and lines. The results are shown in the table below:
+The only differance from this and model 1 is the training. A small grid search will be used to determine which features can be improved when learned jointly. For example, learning orienation and letter is likely to boost training since the feature learned by the letter classifier can be used to classify the orientation of the letter. It is also assumed shape can be learned with letter and orientation since all tasks use patterns and lines. The results are shown in the table below:
 
 In progress
 
 ## Classification Model 3 - Ideas
 - Squeezenet or efficient channel attention
-- Leaky, Swish, of Mish activation
+- Leaky, Swish, or Mish activation
 - Add spectral norm to convs
 - Non-linear classifier heads
 - Hyperbolic model for orientation
@@ -166,9 +164,9 @@ The segementation models are trained on 256x256 images and batch size of 8. The 
 
 ## Segemenation Model 1 - UNet
 
-Our implementation matches the UNet paper with the addition of batchnorm and different activation functions.
-
 Ronneberger, Olaf, Philipp Fischer, and Thomas Brox. "U-Net: Convolutional Networks for Biomedical Image Segmentation." [[arXiv](https://arxiv.org/abs/1705.07115)].
+
+Our implementation matches the UNet paper with the addition of batchnorm and different activation functions.
 
 ![unet_graph](/images/readme/unet_graph.png)
 
@@ -176,24 +174,95 @@ Example of the metrics from a training run:
 
 ![unet_run](/images/readme/unet_run.png)
 
+## **Additional experiments with UNet**
+
+
+### Weight Decay
+**Weight decay** was found to improve performance. Weight decay of **5e-4** is used for all training. This experiment was done before the metrics were logged.
+
+### Downsampling
+For **downsampling**, **maxpool** gives best results. (Relu activation)
+| Downsampling | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
+|-|-|-|-|-|-|-|
+| Maxpool | 91.08 | 83.64 | 96.07 | 90.99 | 0.00003 | 0.036 |
+| Avgpool | 90.53 | 82.71 | 96.08 | 90.21 | 0.00003 | 0.037 |
+| Stride=2 | 89.25 | 80.63 | 95.75 | 89.37 | 0.00005 | 0.045 |
+
+### Filter Count
+Since the model needs to be fast, choosing the right **filter** count is important. **16 filters** was choosen.The same inference time for filters between 2 and 16 is assumed to be other opertations in the data pipline and time spent in the model is extremely low. (Relu activation)
+| Filters | Inference | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
+|-|-|-|-|-|-|-|-|
+| 2 | 2.58 ms | 92.39 | 85.93 | 95.98 | 92.18 | 0.00063 | 0.094 |
+| 4 | 2.58 ms | 94.49 | 89.58 | 96.58 | 94.21 | 0.00033 | 0.083 |
+| 8 | 2.58 ms | 96.62 | 93.48 | 96.78 | 96.10 | 0.00013 | 0.050 |
+| 16 | 2.58 ms | 96.98 | 94.14 | 96.89 | 96.52 | 0.00005 | 0.045 |
+| 32 | 3.75 ms | 97.30 | 94.74 | 96.47 | 96.95 | 0.00005 | 0.044 |
+| 64 | 10.61 ms | 97.57 | 95.26 | 96.90 | 97.26 | 0.00002 | 0.034 |
+
+### Activation
+**Activation** effects accuracy and inference speed. Relu and Mish had the best scores. Silu has lowest overall inference time, but it's poor performance excludes it. Leaky relu with a negative slope of 0.2 was tested; it is possible to tune the negative slope or use PRelu, but the results from Relu and Mish are sufficient so this was not explored. **Relu is planned to be used in the final model.** Mish is still being considered if the final pipeline can run with Mish and not bottleneck.
+| Activation | Inference | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
+|-|-|-|-|-|-|-|-|
+| Relu | 2.53 ms | 97.38 | 94.89 | 96.86 | 97.05 | 0.00004 | 0.042 |
+| Leaky | 2.57 ms | 95.67 | 92.28 | 96.32 | 95.57 | 0.00012 | 0.057 |
+| Silu | 2.29 ms | 92.97 | 86.91 | 96.19 | 92.18 | 0.00076 | 0.070 |
+| Mish | 3.01 ms | 97.15 | 94.46 | 96.83 | 96.73 | 0.00004 | 0.042 |
+
+### Input Size
+Since the data is generated at train time, the **input size** is a cpu bottleneck. Previous experiments used 256, but **192** gives comparable results and training time is reasonable. It is clear that the model improves with input size. A final production model will be trained with the largest image size that can fit on the GPU.
+| Input Size | Model Speed | Training Duration | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
+|-|-|-|-|-|-|-|-|-|
+| 512 | 12.99 ms | 40.14 minutes | 96.38 | 93.03 | 96.61 | 96.04 | 0.00013 | 0.056 |
+| 384 | 8.38 ms | 23.30 minutes | 96.09 | 92.48 | 96.44 | 95.77 | 0.00009 | 0.056 |
+| 320 | 6.59 ms | 16.82 minutes | 96.31 | 92.90 | 96.36 | 96.00 | 0.00008 | 0.053 |
+| 256 | 5.24 ms | 9.81 minutes | 96.10 | 92.50 | 96.67 | 95.70 | 0.00011 | 0.057 |
+| 192 | 5.23 ms | 5.90 minutes | 95.90 | 92.13 | 96.71 | 95.54 | 0.00011 | 0.058 |
+| 128 | 5.23 ms | 3.12 minutes | 95.52 | 91.44 | 96.56 | 95.13 | 0.00013 | 0.062 |
+
+### Batch Size
+
+### Fill Probability
+
+### Optimizer
+
+### Learning Rate
+
 ## Segemenation Model 2 - UNet++
-
-To increase the strength of the segmentation model, the model is upgraded to UNet++. This model made several notable changes. UNet++ concatenates same size feature maps using dense blocks and residual connections. The motivation is to improve the gradient signal by reducing the path length between encoder features and decoder features. 
-
-Our implementation matches the UNet++ paper as closely as possible. The same training is used as our implementation of UNet. Deep supervision is implemented as described in the paper. During training, 1x1 convolution is applied to each dense block the same size as the input image to convert the block into a map with the correct number of output channels. Then each mask is compared to the true mask and the loss is the sum of each masks loss. During inference, the output is the mean of all the masks.
 
 Zhou, Zongwei,  Md Mahfuzur Rahman Siddiquee, Nima Tajbakhsh, and Jianming Liang. "UNet++: A Nested U-Net Architecture for Medical Image Segmentation." [[arXiv](https://arxiv.org/abs/1705.07115)].
 
-![unet_nested_graph](/images/readme/unet_nested_graph.png)
+To increase the strength of the segmentation model, the model is upgraded to UNet++. This model made several notable changes. UNet++ concatenates same size feature maps using dense blocks and residual connections. The motivation is to improve the gradient signal by reducing the path length between encoder features and decoder features. 
+
+Our implementation matches the UNet++ paper as closely as possible. The same training is used as our implementation of UNet. Deep supervision is implemented as described in the paper. Deep supervision is done by using a 1x1 convolution on each dense block the same size as the input image to convert the block into a mask with the correct number of output channels. Then each mask is compared to the true mask and the loss is the sum of each masks loss. During inference, the output is the mean of all the masks.
+
+The UNet++ implementation can be used with and without deep supervision with models called "unet_nested" and "unet_nested_deep", respectively.
+
+![unet_nested_deep_graph](/images/readme/unet_nested_deep_graph.png)
 
 Example of the metrics from a training run:
 
 ![unet_nested_run](/images/readme/unet_nested_run.png)
 
+## **Additional experiments with UNet++**
+
+UNet++ improves the UNet architecture in multiple ways: 1) **ensembles of UNets** at different depths 2) **aggregates feature maps** of the same size into dense blocks and 3) adds a **deep supervision** loss. Ensembling improves the model by having an architecture which supports multiple scales of information in it's decoder. Further, aggregating feature maps is known to give good resuls in many architectures, however it is unclear if combining features maps of the same size is an optimal way to merge features in the decoder. It is assumed that a dense layer will learn which input features have the best information and block the rest. Finally, deep supervision is not required in the architecture, however it provides more gradient signals for the smaller decoders in the ensemble.
+
+### Deep Supervision
+To test which model architecture would improve the task, several versions were trained and the results are in the table below. DS = Deep Supervision.
+| Model | Inference | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
+|-|-|-|-|-|-|-|-|
+| UNet (Relu) | 2.53 ms | 97.30 | 94.75 | 97.00 | 97.09 | 0.000033 | 0.039 |
+| UNet (Mish) | 3.01 ms | 97.11 | 94.38 | 96.75 | 96.91 | 0.000045 | 0.044 |
+| UNet++ (Relu) | 6.08 ms | 97.14 | 94.44 | 96.69 | 96.94 | 0.000047 | 0.044 |
+| UNet++ (Mish) | 6.79 ms | 97.10 | 94.37 | 96.63 | 96.90 | 0.000058 | 0.047 |
+| UNet++ (Relu, DS) | 6.27 ms | 97.09 | 94.34 | 96.85 | 96.79 | 0.000049 | 0.044 |
+| UNet++ (Mish, DS) | 7.09 ms | 96.96 | 94.11 | 96.75 | 96.64 | 0.000069 | 0.048 |
 
 ## Segmentation Summary
 
-| Metric | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
+Here are the metrics from models with the highest dice coefficient from several architectures.
+
+| Model | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
 |-|-|-|-|-|-|-|
-| UNet (Relu) | 97.44 | 95.02 | 96.64 | 97.16 | 0.0004565 | 0.04290 |
-| UNet++ (Relu) | 97.52 | 95.17 | 96.77 | 97.25 | 0.00002932 | 0.03840 |
+| UNet (Relu) | 97.44 | 95.02 | 96.64 | 97.16 | 0.000456 | 0.043 |
+| UNet++ (Relu) | 97.52 | 95.17 | 96.77 | 97.25 | 0.000029 | 0.038 |

@@ -8,7 +8,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader  # Building custom datasets
 import torchvision.transforms as T  # Image processing
 
-from custom_transforms import CustomTransformation
+from custom_transforms import CustomTransformation, AddGaussianNoise
 from generate_targets import TargetGenerator
 
 # os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
@@ -117,7 +117,7 @@ def time_dataloader(dataset, batch_size=64, max_num_workers=8, num=4096):
 
 if __name__ == "__main__":
 
-    input_size = 400
+    input_size = 512
 
     train_size = 256
     batch_size = 8
@@ -126,8 +126,8 @@ if __name__ == "__main__":
     drop_last = True
 
     dataset_folder = None #'images/classify1'  # root directory that has images and labels.csv, if None targets are made during the training
-    bkg_path = 'backgrounds'  # path to background images, None is a random color background
-    target_size = 20  # Smallest target size
+    bkg_path = 'backgrounds/validate'  # path to background images, None is a random color background
+    target_size = 80  # Smallest target size
     fill_prob = 0.5
     expansion_factor = 1  # generate higher resolution targets and downscale, improves aliasing effects
     target_transforms = T.Compose([
@@ -138,6 +138,7 @@ if __name__ == "__main__":
         CustomTransformation(),
         T.Resize((input_size)),  # Make shortest edge this size
         T.ToTensor(),
+        AddGaussianNoise(mean=0.0, std=0.05)
     ])
     val_transforms = T.Compose([
         T.Resize((input_size)),  # Make shortest edge this size
@@ -160,11 +161,13 @@ if __name__ == "__main__":
     print("Image :", x.shape)
     print("Mask :", y.shape)
 
-    # im = T.ToPILImage(mode='RGB')(x)
-    # im.show()
+    x = (x - torch.min(x)) / (torch.max(x) - torch.min(x))
+
+    im = T.ToPILImage(mode='RGB')(x)
+    im.show()
 
     # visualize_dataloader(train_loader)  # use batch_size = 8
 
     # dataset_stats(train_dataset, num=1000)
 
-    time_dataloader(train_dataset, batch_size=8, max_num_workers=8, num=1024)
+    # time_dataloader(train_dataset, batch_size=8, max_num_workers=8, num=1024)

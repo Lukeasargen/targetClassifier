@@ -91,7 +91,7 @@ if __name__ == "__main__" and '__file__' in globals():
     lr_ramp_base = 1e-2
     lr_ramp_steps = 23
     use_weighted_loss = True
-    sigma_lr = base_lr/1000  # lr of the output variance
+    sigma_lr = base_lr/400  # lr of the output variance
     show_graph = True  # use plt to graph, acc and loss
     scalar_threshold = 45/360  # scalar magnitude of difference to be correct
     # Dataset config

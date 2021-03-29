@@ -39,10 +39,10 @@ if __name__ == "__main__":
     threshold = 0.5
 
     # Dataset parameters
-    input_size = 400
+    input_size = 256
     bkg_path = 'backgrounds/validate'
     target_size = 20  # Smallest target size
-    fill_prob = 0.6
+    fill_prob = 1.0
     expansion_factor = 3  # generate higher resolution targets and downscale, improves aliasing effects
     target_transforms = T.Compose([
         T.RandomPerspective(distortion_scale=0.5, p=1.0, interpolation=Image.BICUBIC),
@@ -51,13 +51,9 @@ if __name__ == "__main__":
                 target_size=target_size, expansion_factor=expansion_factor,
                 target_transforms=target_transforms, bkg_path=bkg_path)
 
-    # Load old model
-    # first_model, first_transforms = load_unet_regular("runs/unet/run00636_final.pth", device)
-    first_model, first_transforms = load_unet_regular("runs/unet_nested/run00673_final.pth", device)
-
-    # Load new model
-    # second_model, second_transforms = load_unet_regular("runs/unet/run00636_final.pth", device)
-    second_model, second_transforms = load_unet_regular("runs/unet_nested/run00651_final.pth", device)
+    # Load model
+    first_model, first_transforms = load_unet_regular("runs/unet/run00703_final.pth", device)
+    second_model, second_transforms = load_unet_regular("runs/unet/run00704_final.pth", device)
 
     # Create the visual
     nrows = 4
@@ -93,8 +89,6 @@ if __name__ == "__main__":
             row.append(second_preds*255)  # multiple to 255 rgb scale
             row.append(second_fp_mask*img)
             row.append(second_fn_mask*img)
-
-            row.append(np.logical_xor(second_preds, first_preds)*255)
 
         rows.append( np.hstack(row) )
     grid_img = np.vstack(rows)

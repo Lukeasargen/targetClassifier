@@ -137,8 +137,6 @@ loss=0.03022. acc=0.96949. bce=0.04681. jaccard=0.94140. dice=0.96978. tversky=0
 loss=0.02622. acc=0.96856. bce=0.04235. jaccard=0.94893. dice=0.97378. tversky=0.97054. focal=0.00004.
 618 f=16 maxpool leaky=0.2 bn ts=256 bs=8 sgd plateau 400 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
 loss=0.04031. acc=0.96316. bce=0.05693. jaccard=0.92278. dice=0.95969. tversky=0.95566. focal=0.00012.
-619 f=16 maxpool wo/act bn ts=256 bs=8 sgd plateau 400 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
-loss=0.08059. acc=0.95679. bce=0.14606. jaccard=0.85116. dice=0.91941. tversky=0.90907. focal=0.00144.
 629 f=16 maxpool silu bn ts=256 bs=8 sgd plateau 400 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
 loss=0.07031. acc=0.96191. bce=0.11538. jaccard=0.86914. dice=0.92969. tversky=0.92182. focal=0.00076.
 630 f=16 maxpool mish bn ts=256 bs=8 sgd plateau 400 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
@@ -204,22 +202,81 @@ For model.eval() : Latency=7.28 ms. FPS=137.4119
 For predict() : Latency=7.17 ms. FPS=139.5294
 
 
+679 in=256 unet_nested f=16 maxpool relu bn ts=256 bs=8 sgd plateau 400 lr=1e-2,p=80,g=0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=38.61 minutes. loss=0.19164. acc=0.96517. bce=0.05405. jaccard=0.92849. dice=0.96269. tversky=0.95846. focal=0.00014.
+680 in=256 unet f=16 maxpool relu bn ts=256 bs=8 sgd plateau 400 lr=1e-2,p=80,g=0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=20.95 minutes. loss=0.02691. acc=0.96809. bce=0.04440. jaccard=0.94764. dice=0.97309. tversky=0.97102. focal=0.00005.
 
+683 in=256 unet f=16 maxpool silu bn ts=256 bs=8 sgd plateau 400 lr=1e-2,p=60,g=0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=20.79 minutes. loss=0.07425. acc=0.96143. bce=0.10214. jaccard=0.86191. dice=0.92575. tversky=0.92242. focal=0.00052.
+
+# Batch size of 8 works for these hyperparameters
+684 in=256 unet_nested f=16 maxpool relu bn ts=256 bs=8 sgd step 300 lr=1e-1,[200, 250],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=28.98 minutes. 9600 iterations. loss=0.15487. acc=0.96831. bce=0.04407. jaccard=0.94510. dice=0.97174. tversky=0.96927. focal=0.00005.
+685 in=256 unet_nested f=16 maxpool relu bn ts=256 bs=4 sgd step 300 lr=1e-1,[200, 250],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=29.79 minutes. 19200 iterations. loss=0.15550. acc=0.96845. bce=0.04659. jaccard=0.94052. dice=0.96912. tversky=0.96571. focal=0.00009.
+
+# Same as above, but with random noise on input
+686 in=256 unet_nested f=16 maxpool relu bn ts=256 bs=8 sgd step 300 lr=1e-1,[200, 250],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=29.38 minutes. 9600 iterations. loss=0.21036. acc=0.96856. bce=0.05168. jaccard=0.92797. dice=0.96254. tversky=0.95757. focal=0.00008.
+
+# Try dice+bce loss
+687 in=256 unet_nested f=16 maxpool relu bn ts=256 bs=8 sgd step 375 lr=1e-1,[225, 300],0.2 m=0.9 wd=5e-4 dice,bce fp=0.9
+Duration=36.62 minutes. 12000 iterations. loss=0.36978. acc=0.96681. bce=0.02519. jaccard=0.92009. dice=0.95831. tversky=0.95454. focal=0.000011.
+
+
+# Models after 687 use optional deep supervision
+
+
+688 in=256 unet f=16 maxpool mish bn ts=256 bs=8 sgd step 250 lr=1e-1,[180, 220],0.2 m=0.9 wd=5e-4 dice fp=1.0
+Duration=14.98 minutes. 8000 iterations. loss=0.03533. acc=0.96357. bce=0.05807. jaccard=0.93183. dice=0.96467. tversky=0.96231. focal=0.000101.
 
 # Test with 8 filters
- in=256 unet f=8 maxpool relu bn ts=256 bs=8 sgd plateau 200 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
-
- in=256 unet_nested f=8 maxpool relu bn ts=256 bs=8 sgd plateau 100 lr=1e-2,p=50,g=0.2 m=0.9 wd=5e-4 dice
-
+690 in=256 unet f=8 maxpool mish bn ts=256 bs=8 sgd step 250 lr=1e-1,[180, 220],0.2 m=0.9 wd=5e-4 dice fp=1.0
+Duration=14.59 minutes. 8000 iterations. loss=0.04413. acc=0.95896. bce=0.06941. jaccard=0.91556. dice=0.95587. tversky=0.95165. focal=0.000179.
 
 
+# effect of deep supervision
+691 in=256 unet_nested f=16 maxpool relu bn ts=256 bs=8 sgd step 450 lr=1e-1,[200, 350],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=41.90 minutes. 14400 iterations. loss=0.02862. acc=0.96690. bce=0.04461. jaccard=0.94440. dice=0.97138. tversky=0.96938. focal=0.000047.
+703 in=256 unet_nested_deep f=16 maxpool relu bn ts=256 bs=8 sgd step 450 lr=1e-1,[200, 350],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=43.51 minutes. 14400 iterations. loss=0.14138. acc=0.96846. bce=0.04483. jaccard=0.94341. dice=0.97086. tversky=0.96789. focal=0.000049.
+704 in=256 unet_nested_deep f=16 maxpool mish bn ts=256 bs=8 sgd step 450 lr=1e-1,[200, 350],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=48.57 minutes. 14400 iterations. loss=0.14477. acc=0.96754. bce=0.04792. jaccard=0.94108. dice=0.96956. tversky=0.96640. focal=0.000069.
+706 in=256 unet_nested f=16 maxpool mish bn ts=256 bs=8 sgd step 450 lr=1e-1,[200, 350],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=46.77 minutes. 14400 iterations. loss=0.02901. acc=0.96629. bce=0.04748. jaccard=0.94368. dice=0.97099. tversky=0.96902. focal=0.000058.
+707 in=256 unet f=16 maxpool mish bn ts=256 bs=8 sgd step 450 lr=1e-1,[200, 350],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=23.85 minutes. 14400 iterations. loss=0.02893. acc=0.96750. bce=0.04419. jaccard=0.94382. dice=0.97107. tversky=0.96911. focal=0.000045.
+708 in=256 unet f=16 maxpool relu bn ts=256 bs=8 sgd step 450 lr=1e-1,[200, 350],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=23.68 minutes. 14400 iterations. loss=0.02698. acc=0.97001. bce=0.03924. jaccard=0.94749. dice=0.97302. tversky=0.97086. focal=0.000033.
+709 in=256 unet f=16 maxpool mish bn ts=256 bs=8 sgd step 450 lr=1e-1,[200, 350],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=23.98 minutes. 14400 iterations. loss=0.02968. acc=0.96768. bce=0.04487. jaccard=0.94238. dice=0.97032. tversky=0.96815. focal=0.000047.
 
-# Batch size
+# unet, input size
+711 in=512 unet f=16 maxpool relu bn ts=256 bs=8 sgd step 180 lr=1e-1,[100, 150],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=40.14 minutes. 5760 iterations. loss=0.03620. acc=0.96607. bce=0.05620. jaccard=0.93030. dice=0.96380. tversky=0.96037. focal=0.000131.
+712 in=384 unet f=16 maxpool relu bn ts=256 bs=8 sgd step 180 lr=1e-1,[100, 150],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=23.30 minutes. 5760 iterations. loss=0.03911. acc=0.96437. bce=0.05601. jaccard=0.92479. dice=0.96089. tversky=0.95772. focal=0.000092.
+713 in=256 unet f=16 maxpool relu bn ts=256 bs=8 sgd step 180 lr=1e-1,[100, 150],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=9.81 minutes. 5760 iterations. loss=0.03905. acc=0.96670. bce=0.05662. jaccard=0.92503. dice=0.96095. tversky=0.95704. focal=0.000110.
+714 in=128 unet f=16 maxpool relu bn ts=256 bs=8 sgd step 180 lr=1e-1,[100, 150],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=3.12 minutes. 5760 iterations. loss=0.04481. acc=0.96551. bce=0.06205. jaccard=0.91437. dice=0.95519. tversky=0.95126. focal=0.000131.
+718 in=192 unet f=16 maxpool relu bn ts=256 bs=8 sgd step 180 lr=1e-1,[100, 150],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=5.90 minutes. 5760 iterations. loss=0.04108. acc=0.96713. bce=0.05833. jaccard=0.92126. dice=0.95892. tversky=0.95537. focal=0.000115.
+719 in=320 unet f=16 maxpool relu bn ts=256 bs=8 sgd step 180 lr=1e-1,[100, 150],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=16.82 minutes. 5760 iterations. loss=0.03684. acc=0.96362. bce=0.05304. jaccard=0.92900. dice=0.96316. tversky=0.96004. focal=0.000080.
+
+# unet, batch size
+
+
+# unet, fill probability
+in=192 unet f=16 maxpool relu bn ts=256 bs=8 sgd step 200 lr=1e-1,[110, 160],0.2 m=0.9 wd=5e-4 dice fp=1.0
+
+
+# unet, optimizer
 
 
 
-
-# fill probability
-
+# unet, Learning rate
 
 
