@@ -93,7 +93,7 @@ _Invalid Assumption - The labels can be learned jointly._ This is not valid beca
 _Invalid Assumption - The labels have the same difficultly._ The joint loss used was simply the sum of all task losses. While training, it was clear that the tasks varied in difficulty and using an equal weight resulted in certain tasks dominating the overall loss. In other words, the loss scale for each task was different. To inhibit the effect of different loss scales, the joint loss used was an uncertainty weighted loss for each task. The uncertainty is a learned parameter (sigma) and comes from this paper:<br>
 Kendall, Alex, Yarin Gal, and Roberto Cipolla. "Multi-task learning using uncertainty to weigh losses for scene geometry and semantics." [[arXiv](https://arxiv.org/abs/1705.07115)]
 
-The model was trained on 32x32 images normalized by the dataset mean and standard deviation. The ResNet backbone had filters [32, 32, 64, 128] and has 2 residual blocks at each level. The blocks have 2 squences of Convolution-Batchnorm-LeakyRelu and a residual connection. The The task heads are linear layers. The optimizer is SGD with 0.9 momentum, nestrov acceleration, weight decay of 5e-4, and 256 mini batch size. The learning rate is starts at 1e-2 and ramps up linearly for 23 epochs to the base learning rate 6e-2. The learning is divided by 10 at 62 and 68 epochs and training ends at 72 epochs. The uncertainty of the loss scales has a learning rate 1000 times less than the model weights. The tasks use a cross entropy loss.
+The model was trained on 32x32 images normalized by the dataset mean and standard deviation. The ResNet backbone had filters [32, 32, 64, 128] and has 2 residual blocks at each level. The blocks have 2 squences of Convolution-Batchnorm-LeakyRelu and a residual connection. The The task heads are linear layers. The optimizer is SGD with 0.9 momentum, nestrov acceleration, weight decay of 5e-4, and 256 mini batch size. The learning rate is starts at 1e-2 and ramps up linearly for 23 epochs to the base learning rate 6e-2. The learning is divided by 10 at 62 and 68 epochs and training ends at 72 epochs. The tasks use a cross entropy loss.
 
 Example of the metrics from a single training run:
 
@@ -126,11 +126,11 @@ Even though the model converges for all reasonable values of the sigma learning 
 
 The only differance from this and model 1 is the training. A small grid search will be used to determine which features can be improved when learned jointly. For example, learning orienation and letter is likely to boost training since the feature learned by the letter classifier can be used to classify the orientation of the letter. It is also assumed shape can be learned with letter and orientation since all tasks use patterns and lines. The results are shown in the table below:
 
-In progress
+_In progress..._
 
 ## Classification Model 3 - Ideas
 - Squeezenet or efficient channel attention
-- Leaky, Swish, or Mish activation
+- Swish or Mish activation
 - Add spectral norm to convs
 - Non-linear classifier heads
 - Hyperbolic model for orientation
@@ -146,15 +146,6 @@ The best weights of each model were tested on a validation set and the results a
 | Multitask Resnet | 89.46 | 99.07 | 96.95 | 99.95 | 98.30 |
 | Multitask Resnet (2-stages) |  |  |  |  |  |
 
-## Comments on  validation
-
-Generating random targets during training removes the need for a validation set. This is  verified this by creating a set of 300k target images and labels. This was split into 291k training and 9k validation samples. Here are the results from a training run:
-
-![training_split_run](/images/readme/training_split_run.png)
-
-The validation is the dashed line and training is solid. These results are easily reproducible for various changes in hyperparameters. Given how close the validation line flows the training line, it's not worth the compute to do validation while training.
-
-A validation set created from real images of targets is in progress.
 
 # Segmentation
 
@@ -174,13 +165,13 @@ Example of the metrics from a training run:
 
 ![unet_run](/images/readme/unet_run.png)
 
-## **Additional experiments with UNet**
+## **Experiments with UNet**
 
 
-### Weight Decay
+### Weight Decay - 5e-4
 **Weight decay** was found to improve performance. Weight decay of **5e-4** is used for all training. This experiment was done before the metrics were logged.
 
-### Downsampling
+### Downsampling - Maxpool
 For **downsampling**, **maxpool** gives best results. (Relu activation)
 | Downsampling | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
 |-|-|-|-|-|-|-|
@@ -188,44 +179,84 @@ For **downsampling**, **maxpool** gives best results. (Relu activation)
 | Avgpool | 90.53 | 82.71 | 96.08 | 90.21 | 0.00003 | 0.037 |
 | Stride=2 | 89.25 | 80.63 | 95.75 | 89.37 | 0.00005 | 0.045 |
 
-### Filter Count
-Since the model needs to be fast, choosing the right **filter** count is important. **16 filters** was choosen.The same inference time for filters between 2 and 16 is assumed to be other opertations in the data pipline and time spent in the model is extremely low. (Relu activation)
-| Filters | Inference | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
+### Filter Count - 16 Filters is enough for experiments
+Since the model needs to be fast, choosing the right **filter** count is important. **16 filters** was choosen. The same inference time for filters between 2 and 16 is assumed to be other opertations in the data pipline and time spent in the model is extremely low. (Relu activation)
+| Filters | Inference (ms) | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
 |-|-|-|-|-|-|-|-|
-| 2 | 2.58 ms | 92.39 | 85.93 | 95.98 | 92.18 | 0.00063 | 0.094 |
-| 4 | 2.58 ms | 94.49 | 89.58 | 96.58 | 94.21 | 0.00033 | 0.083 |
-| 8 | 2.58 ms | 96.62 | 93.48 | 96.78 | 96.10 | 0.00013 | 0.050 |
-| 16 | 2.58 ms | 96.98 | 94.14 | 96.89 | 96.52 | 0.00005 | 0.045 |
-| 32 | 3.75 ms | 97.30 | 94.74 | 96.47 | 96.95 | 0.00005 | 0.044 |
-| 64 | 10.61 ms | 97.57 | 95.26 | 96.90 | 97.26 | 0.00002 | 0.034 |
+| 2 | 2.58 | 92.39 | 85.93 | 95.98 | 92.18 | 0.00063 | 0.094 |
+| 4 | 2.58 | 94.49 | 89.58 | 96.58 | 94.21 | 0.00033 | 0.083 |
+| 8 | 2.58 | 96.62 | 93.48 | 96.78 | 96.10 | 0.00013 | 0.050 |
+| 16 | 2.58 | 96.98 | 94.14 | 96.89 | 96.52 | 0.00005 | 0.045 |
+| 32 | 3.75 | 97.30 | 94.74 | 96.47 | 96.95 | 0.00005 | 0.044 |
+| 64 | 10.61 | 97.57 | 95.26 | 96.90 | 97.26 | 0.00002 | 0.034 |
 
-### Activation
+### Activation - Relu
 **Activation** effects accuracy and inference speed. Relu and Mish had the best scores. Silu has lowest overall inference time, but it's poor performance excludes it. Leaky relu with a negative slope of 0.2 was tested; it is possible to tune the negative slope or use PRelu, but the results from Relu and Mish are sufficient so this was not explored. **Relu is planned to be used in the final model.** Mish is still being considered if the final pipeline can run with Mish and not bottleneck.
-| Activation | Inference | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
+| Activation | Inference (ms) | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
 |-|-|-|-|-|-|-|-|
-| Relu | 2.53 ms | 97.38 | 94.89 | 96.86 | 97.05 | 0.00004 | 0.042 |
-| Leaky | 2.57 ms | 95.67 | 92.28 | 96.32 | 95.57 | 0.00012 | 0.057 |
-| Silu | 2.29 ms | 92.97 | 86.91 | 96.19 | 92.18 | 0.00076 | 0.070 |
-| Mish | 3.01 ms | 97.15 | 94.46 | 96.83 | 96.73 | 0.00004 | 0.042 |
+| Relu | 2.53 | 97.38 | 94.89 | 96.86 | 97.05 | 0.00004 | 0.042 |
+| Leaky | 2.57 | 95.67 | 92.28 | 96.32 | 95.57 | 0.00012 | 0.057 |
+| Silu | 2.29 | 92.97 | 86.91 | 96.19 | 92.18 | 0.00076 | 0.070 |
+| Mish | 3.01 | 97.15 | 94.46 | 96.83 | 96.73 | 0.00004 | 0.042 |
 
-### Input Size
-Since the data is generated at train time, the **input size** is a cpu bottleneck. Previous experiments used 256, but **192** gives comparable results and training time is reasonable. It is clear that the model improves with input size. A final production model will be trained with the largest image size that can fit on the GPU.
-| Input Size | Model Speed | Training Duration | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
+### Input Size - 192
+Since the data is generated at train time, the **input size** is a cpu bottleneck. Previous experiments used 256, but **192** gives comparable results and training time is reasonable. It is clear that the model improves with increased input size. A final production model will be trained with the largest image size that can fit on the GPU.
+| Input Size | Model Speed (ms) | Training Duration (Minutes) | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
 |-|-|-|-|-|-|-|-|-|
-| 512 | 12.99 ms | 40.14 minutes | 96.38 | 93.03 | 96.61 | 96.04 | 0.00013 | 0.056 |
-| 384 | 8.38 ms | 23.30 minutes | 96.09 | 92.48 | 96.44 | 95.77 | 0.00009 | 0.056 |
-| 320 | 6.59 ms | 16.82 minutes | 96.31 | 92.90 | 96.36 | 96.00 | 0.00008 | 0.053 |
-| 256 | 5.24 ms | 9.81 minutes | 96.10 | 92.50 | 96.67 | 95.70 | 0.00011 | 0.057 |
-| 192 | 5.23 ms | 5.90 minutes | 95.90 | 92.13 | 96.71 | 95.54 | 0.00011 | 0.058 |
-| 128 | 5.23 ms | 3.12 minutes | 95.52 | 91.44 | 96.56 | 95.13 | 0.00013 | 0.062 |
+| 512 | 12.99 | 40.14 | 96.38 | 93.03 | 96.61 | 96.04 | 0.00013 | 0.056 |
+| 384 | 8.38 | 23.30 | 96.09 | 92.48 | 96.44 | 95.77 | 0.00009 | 0.056 |
+| 320 | 6.59 | 16.82 | 96.31 | 92.90 | 96.36 | 96.00 | 0.00008 | 0.053 |
+| 256 | 5.24 | 9.81 | 96.10 | 92.50 | 96.67 | 95.70 | 0.00011 | 0.057 |
+| 192 | 5.23 | 5.90 | 95.90 | 92.13 | 96.71 | 95.54 | 0.00011 | 0.058 |
+| 128 | 5.23 | 3.12 | 95.52 | 91.44 | 96.56 | 95.13 | 0.00013 | 0.062 |
 
-### Batch Size
+### Batch Size - Large as possible
 
-### Fill Probability
+Each model sees the exact **same number of images**.
 
-### Optimizer
+| Batch Size | Iterations | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
+|-|-|-|-|-|-|-|-|
+| 64  | 800 | 96.40 | 93.07 | 96.41 | 96.21 | 0.00010 | 0.055 |
+| 32  | 1600 | 94.66 | 89.86 | 96.27 | 94.25 | 0.00017 | 0.053 |
+| 16  | 3200 | 95.71 | 91.78 | 96.52 | 95.28 | 0.00008 | 0.053 |
+| 8  | 6400 | 96.22 | 92.72 | 96.72 | 95.81 | 0.00010 | 0.057 |
+| 4  | 12800 | 95.99 | 92.31 | 96.70 | 95.61 | 0.00020 | 0.062 |
 
-### Learning Rate
+Each model has the **same number of update steps**.
+
+| Batch Size | Iterations | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
+|-|-|-|-|-|-|-|-|
+| 64  | 3200 | 96.36 | 92.98 | 96.68 | 96.01 | 0.00005 | 0.047 |
+| 32  | 3200 | 96.03 | 92.36 | 96.56 | 95.67 | 0.00007 | 0.052 |
+| 16  | 3200 | 95.71 | 91.78 | 96.52 | 95.28 | 0.00008 | 0.053 |
+| 8  | 3200 | 95.12 | 90.71 | 96.45 | 94.66 | 0.00014 | 0.063 |
+| 4  | 3200 | 93.27 | 87.46 | 96.03 | 92.56 | 0.00074 | 0.097 |
+
+It is clear that more iterations and larger batch size improves results for these training hyperparameters. For sake of time, the experiments will continue to use a batch of 16. The final model will be trained with the largest batch size possible.
+
+### Optimizer - Use Adam
+Optimizer is extremely important. So far only SGD with momentum has been used. For this experiment, the intial learning rate is in the table. The learning rate is stepped by 0.2 at 150 and 210 epochs. Training ends at 240 epochs. SGD, and RMSprop all use a momentum of 0.9 and all optimizers have a weight decay of 5e-4 except Adam.
+| Optimizer | Initial LR | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
+|-|-|-|-|-|-|-|-|
+| SGD | 1e-1 | 96.27 | 92.82 | 96.74 | 95.94 | 0.00008 | 0.053 |
+| RMSprop | 1e-3 | 92.14 | 85.55 | 95.84 | 91.34 | 0.00101 | 0.119 |
+| Adam | 4e-3 | 96.51 | 93.26 | 96.68 | 96.23 | 0.00092 | 0.123 |
+| AdamW | 4e-3 | 96.37 | 93.01 | 96.74 | 96.20 | 0.00094 | 0.121 |
+| Adagrad | 1e-2 | 94.38 | 89.39 | 96.47 | 93.87 | 0.00019 | 0.067 |
+
+### Loss Function - Dice Loss
+| Loss | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
+|-|-|-|-|-|-|-|
+| Jaccard | 96.23 | 92.73 | 96.69 | 95.88 | 0.00110 | 0.133 |
+| Dice | 96.14 | 92.57 | 96.65 | 95.80 | 0.00101 | 0.130 |
+| Dice+Jaccard | 96.13 | 92.56 | 96.76 | 95.75 | 0.00103 | 0.130 |
+| Tversky(α=0.3,β=0.7) | 95.68 | 91.73 | 96.46 | 96.11 | 0.00139 | 0.144 |
+| Dice+BCE | 95.64 | 91.65 | 96.70 | 95.41 | 0.00001 | 0.028 |
+| Jaccard+BCE | 95.48 | 91.35 | 96.41 | 95.18 | 0.00002 | 0.034 |
+| Tversky(α=0.7,β=0.3) | 95.36 | 91.14 | 96.37 | 94.22 | 0.00149 | 0.150 |
+| BCE | 93.46 | 87.73 | 96.51 | 93.47 | 0.00001 | 0.027 |
+| Focal(α=0.5,γ=2) | 88.69 | 79.71 | 96.20 | 88.93 | 0.00005 | 0.045 |
+
 
 ## Segemenation Model 2 - UNet++
 
@@ -243,20 +274,20 @@ Example of the metrics from a training run:
 
 ![unet_nested_run](/images/readme/unet_nested_run.png)
 
-## **Additional experiments with UNet++**
+## **Experiments with UNet++**
 
 UNet++ improves the UNet architecture in multiple ways: 1) **ensembles of UNets** at different depths 2) **aggregates feature maps** of the same size into dense blocks and 3) adds a **deep supervision** loss. Ensembling improves the model by having an architecture which supports multiple scales of information in it's decoder. Further, aggregating feature maps is known to give good resuls in many architectures, however it is unclear if combining features maps of the same size is an optimal way to merge features in the decoder. It is assumed that a dense layer will learn which input features have the best information and block the rest. Finally, deep supervision is not required in the architecture, however it provides more gradient signals for the smaller decoders in the ensemble.
 
 ### Deep Supervision
 To test which model architecture would improve the task, several versions were trained and the results are in the table below. DS = Deep Supervision.
-| Model | Inference | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
+| Model | Inference (ms) | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
 |-|-|-|-|-|-|-|-|
-| UNet (Relu) | 2.53 ms | 97.30 | 94.75 | 97.00 | 97.09 | 0.000033 | 0.039 |
-| UNet (Mish) | 3.01 ms | 97.11 | 94.38 | 96.75 | 96.91 | 0.000045 | 0.044 |
-| UNet++ (Relu) | 6.08 ms | 97.14 | 94.44 | 96.69 | 96.94 | 0.000047 | 0.044 |
-| UNet++ (Mish) | 6.79 ms | 97.10 | 94.37 | 96.63 | 96.90 | 0.000058 | 0.047 |
-| UNet++ (Relu, DS) | 6.27 ms | 97.09 | 94.34 | 96.85 | 96.79 | 0.000049 | 0.044 |
-| UNet++ (Mish, DS) | 7.09 ms | 96.96 | 94.11 | 96.75 | 96.64 | 0.000069 | 0.048 |
+| UNet (Relu) | 2.53 | 97.30 | 94.75 | 97.00 | 97.09 | 0.000033 | 0.039 |
+| UNet (Mish) | 3.01 | 97.11 | 94.38 | 96.75 | 96.91 | 0.000045 | 0.044 |
+| UNet++ (Relu) | 6.08 | 97.14 | 94.44 | 96.69 | 96.94 | 0.000047 | 0.044 |
+| UNet++ (Mish) | 6.79 | 97.10 | 94.37 | 96.63 | 96.90 | 0.000058 | 0.047 |
+| UNet++ (Relu, DS) | 6.27 | 97.09 | 94.34 | 96.85 | 96.79 | 0.000049 | 0.044 |
+| UNet++ (Mish, DS) | 7.09 | 96.96 | 94.11 | 96.75 | 96.64 | 0.000069 | 0.048 |
 
 ## Segmentation Summary
 

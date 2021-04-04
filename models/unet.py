@@ -176,8 +176,6 @@ class UNetNestedDecoder(nn.Module):
         else:
             return [out]
 
-import numpy as np
-
 class UNet(nn.Module):
     def __init__(self, in_channels=3, out_channels=1, model_type='unet', filters=16, 
                 activation='relu', mean=[0,0,0], std=[1,1,1], input_size=None):
@@ -187,8 +185,6 @@ class UNet(nn.Module):
         self.model_type = model_type
         self.filters = filters
         self.input_size = input_size
-        self.test = ["A", "B", "C"]
-        self.test2 = (90, "E")
         self.model_args = {"in_channels": in_channels, "out_channels": out_channels,  # mean and std are saved as parameters
             "model_type": model_type, "filters": filters, "activation": activation} 
         if type(filters) == int:
@@ -241,10 +237,9 @@ class UNet(nn.Module):
     
     @torch.jit.export
     def predict(self, x):
-        with torch.no_grad():
-            masks = self.forward(x)
-            logits = torch.mean(torch.cat(masks, dim=1), dim=1, keepdim=True)
-            return torch.sigmoid(logits)
+        masks = self.forward(x)
+        logits = torch.mean(torch.cat(masks, dim=1), dim=1, keepdim=True)
+        return torch.sigmoid(logits)
 
 
 def train_test(model, device):
@@ -271,12 +266,12 @@ if __name__ == "__main__":
 
     in_channels = 3
     out_channels = 1
-    model_type = "unet_nested_deep"  # unet, unet_nested, unet_nested_deep
-    filters = 32  # 16
+    model_type = "unet"  # unet, unet_nested, unet_nested_deep
+    filters = 16  # 16
     activation = "relu"  # relu, leaky_relu, silu, mish
 
     batch_size = 8
-    input_size = 192
+    input_size = 256
 
     model = UNet(in_channels, out_channels, model_type, filters, activation, input_size=input_size).to(device)
 
@@ -291,28 +286,29 @@ if __name__ == "__main__":
     # predict = model.predict(x)
     # print("predict :", predict.shape, torch.min(predict).item(), torch.max(predict).item())
     
-
-    model = torch.jit.script(model)
-    model.save("runs/scripted_unet.pt")
-
-    # model.train()
-    # model.freeze_norm()
-    # print(model)
-    # logits = model(x)
+    # scripted = torch.jit.script(model)
+    # scripted.save("runs/scripted_unet.pt")
+    # scripted.train()
+    # scripted.freeze_norm()
+    # logits = scripted(x)
     # print("logits :", type(logits))
-    # predict = model.predict(x)
+    # predict = scripted.predict(x)
     # print("predict :", predict.shape, torch.min(predict).item(), torch.max(predict).item())
 
-    # import torch.autograd.profiler as profiler
-    # model.train()
-    # with profiler.profile(use_cuda=True, profile_memory=True) as prof:
-    #     model(x)
+    warmup = 3
+    model.eval()
+    for i in range(warmup):
+        out = model.predict(x)
+
+    import torch.autograd.profiler as profiler
+    with profiler.profile(use_cuda=True, profile_memory=True) as prof:
+        out = model.predict(x)
     
     # print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
     # print(prof.key_averages().table(sort_by="cpu_memory_usage", row_limit=10))
 
-    # print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
-    # print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=10))
+    print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=16))
+    print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=16))
 
     # print(prof.key_averages())
 

@@ -48,21 +48,18 @@ def view_outputs(model, train_dataset, threshold=0.5):
     im.save("images/unet_train_demo.png")
 
 
-@torch.jit.script
 def calc_loss(logits: torch.Tensor, targets: torch.Tensor):
     # bce_loss = F.binary_cross_entropy_with_logits(logits, targets)
     # focal_loss = focal_metric(logits, targets, alpha=0.5, gamma=2.0)
 
     preds = torch.sigmoid(logits)
-    # jaccard_loss = 1 - jaccard_iou(preds, targets, smooth=1.0)
+    jaccard_loss = 1.0 - jaccard_iou(preds, targets, smooth=1.0)
     dice_loss = 1.0 - dice_coeff(preds, targets, smooth=1.0)
-    # tversky_loss = 1 - tversky_measure(preds, targets, alpha=0.3, beta=0.7, smooth=1.0)
+    # tversky_loss = 1.0 - tversky_measure(preds, targets, alpha=0.3, beta=0.7, smooth=1.0)
 
-    loss = dice_loss
-    return loss
+    return jaccard_loss + dice_loss
 
 
-@torch.jit.script
 def loss_func(logits: List[torch.Tensor], targets: torch.Tensor):
     loss = torch.tensor(0.0, device=targets.device)
     for l in logits:
@@ -85,9 +82,10 @@ def calc_metrics(logits: torch.Tensor, targets: torch.Tensor):
 
 if __name__ == "__main__":
     MANUAL_SEED = 42
+    np.random.seed(MANUAL_SEED)
     torch.manual_seed(MANUAL_SEED)
     torch.cuda.manual_seed(MANUAL_SEED)
-    np.random.seed(MANUAL_SEED)
+    torch.backends.cudnn.deterministic = True
 
     # Training data
     graph_metrics = True
@@ -104,26 +102,26 @@ if __name__ == "__main__":
 
     # Training Hyperparameters
     input_size = 192 # 400
-    num_epochs = 200 # 20
+    num_epochs = 280 # 20
     train_size = 256 # 8000
-    batch_size = 64 # 4
+    batch_size = 16 # 4
     shuffle = False
-    num_workers = 4
+    num_workers = 6
     drop_last = False
 
     # Mixed precision
     use_amp = False
 
     # Optimization
-    optim_type = 'sgd'  # sgd 1e-1, rms 1e-3, adam 4e-3, adamw 4e-3
-    base_lr = 1e-1  # 1e-1
+    optim_type = 'adam'  # sgd 1e-1, rmsprop 1e-3, adam 4e-3, adamw 4e-3, adagrad 1e-2
+    base_lr = 4e-3  # 1e-1
     momentum = 0.9  # 0.9
     nesterov = True
     weight_decay = 5e-4  # 0, 1e-5, 3e-5, *1e-4, 3e-4, *5e-4, 3e-4, 1e-3, 1e-2
     scheduler_type = 'step'  # step, plateau, exp
-    lr_milestones = [110, 160]  # for StepLR, [10, 15]
+    lr_milestones = [200, 250]  # for StepLR, [10, 15]
     lr_gamma = 0.2
-    plateau_patience = 60
+    plateau_patience = 20
 
     # Dataset parameters
     bkg_path = 'backgrounds'  # path to background images, None is a random color background
@@ -138,7 +136,7 @@ if __name__ == "__main__":
     train_transforms = T.Compose([
         CustomTransformation(),
         T.ToTensor(),
-        AddGaussianNoise(std=0.04)
+        AddGaussianNoise(mean=0.5, std=0.08)
     ])
     val_transforms = T.Compose([
         T.ToTensor(),
@@ -171,13 +169,14 @@ if __name__ == "__main__":
     # Setup optimizer
     if optim_type == 'sgd':
         optimizer = optim.SGD(model.parameters(), lr=base_lr, momentum=momentum, nesterov=nesterov, weight_decay=weight_decay)
-    elif optim_type == 'rms':
+    elif optim_type == 'rmsprop':
         optimizer = optim.RMSprop(model.parameters(), lr=base_lr, weight_decay=weight_decay, momentum=momentum)
     elif optim_type == 'adam':
         optimizer = optim.Adam(model.parameters(), lr=base_lr)
     elif optim_type == 'adamw':
         optimizer = optim.AdamW(model.parameters(), lr=base_lr, weight_decay=weight_decay)
-    
+    elif optim_type == 'adagrad':
+        optimizer = optim.Adagrad(model.parameters(), lr=base_lr, weight_decay=weight_decay)
 
     # Setup scheduler
     if scheduler_type == 'step':
@@ -222,38 +221,39 @@ if __name__ == "__main__":
     # Training loop
     t0 = time.time()
     iterations = 0
-    model.train()
     for epoch in range(num_epochs):  # loop over the dataset multiple times
 
         t1 = time.time()
         epoch_loss_total = 0.0
         batch_metrics_total = Counter({})
+        model.train()
+        model.freeze_norm()
         for batch_idx, (data, true_masks) in enumerate(train_loader):
             data = data.to(device=device)
             true_masks = true_masks.to(device=device)
 
-            optimizer.zero_grad(set_to_none=False)  # TODO : set to true and test each optimizer
+            optimizer.zero_grad(set_to_none=True)  # TODO : set to true and test each optimizer
 
             if use_amp:
                 with amp.autocast():
                     logits = model(data)
-                    if type(logits) != list: logits = [logits]
                     loss = loss_func(logits, true_masks)
                     scalar.scale(loss).backward()
                     scalar.step(optimizer)
                     scalar.update()
             else:
                 logits = model(data)
-                if type(logits) != list: logits = [logits]
                 loss = loss_func(logits, true_masks)
                 loss.backward()
 
             optimizer.step()
             iterations += 1
 
+            # TODO : Validation
+            # model.eval()
+
             # Update running metrics
-            if type(logits) == list:
-                logits = torch.mean(torch.cat(logits, dim=1), dim=1, keepdim=True)
+            logits = torch.mean(torch.cat(logits, dim=1), dim=1, keepdim=True)
             batch_metrics = calc_metrics(logits, true_masks)
             epoch_loss_total += loss.item()
             batch_metrics_total += Counter(batch_metrics)
@@ -280,14 +280,14 @@ if __name__ == "__main__":
                 scheduler.step()
 
         duration = time.time()-t1
-        remaining = duration*(num_epochs-epoch)
+        remaining = duration*(num_epochs-epoch-1)
         print("epoch {}. {} iterations: {}. loss={:.04f}. lr={:.06f}. elapsed={}. remaining={}.".format(epoch+1, iterations, time_to_string(duration), epoch_loss, optimizer.param_groups[0]['lr'], time_to_string(time.time()-t0), time_to_string(remaining)))
 
     # END TRAIN LOOP
 
     print('Finished Training. Duration={}. {} iterations.'.format(time_to_string(time.time()-t0), iterations))
     print("Final stats:")
-    print("loss={:.05f}. acc={:.05f}. bce={:.05f}. jaccard={:.05f}. dice={:.05f}. tversky={:.05f}. focal={:.06f}.".format(epoch_metrics["train_loss"], epoch_metrics["acc"], epoch_metrics["bce"], epoch_metrics["jaccard"], epoch_metrics["dice"], epoch_metrics["tversky"], epoch_metrics["focal"]))
+    print("loss={:.05f}. acc={:.04f}. bce={:.05f}. jaccard={:.04f}. dice={:.04f}. tversky={:.04f}. focal={:.06f}.".format(epoch_metrics["train_loss"], epoch_metrics["acc"], epoch_metrics["bce"], epoch_metrics["jaccard"], epoch_metrics["dice"], epoch_metrics["tversky"], epoch_metrics["focal"]))
     
     # Save Model
     if save_final:

@@ -266,17 +266,116 @@ Duration=5.90 minutes. 5760 iterations. loss=0.04108. acc=0.96713. bce=0.05833. 
 719 in=320 unet f=16 maxpool relu bn ts=256 bs=8 sgd step 180 lr=1e-1,[100, 150],0.2 m=0.9 wd=5e-4 dice fp=0.9
 Duration=16.82 minutes. 5760 iterations. loss=0.03684. acc=0.96362. bce=0.05304. jaccard=0.92900. dice=0.96316. tversky=0.96004. focal=0.000080.
 
-# unet, batch size
-
-
 # unet, fill probability
-in=192 unet f=16 maxpool relu bn ts=256 bs=8 sgd step 200 lr=1e-1,[110, 160],0.2 m=0.9 wd=5e-4 dice fp=1.0
+723 in=192 unet f=16 maxpool relu bn ts=256 bs=8 sgd step 200 lr=1e-1,[110, 160],0.2 m=0.9 wd=5e-4 dice fp=1.0
+loss=0.03599. acc=0.96413. bce=0.05509. jaccard=0.93069. dice=0.96401. tversky=0.96210. focal=0.000099.
+724 in=192 unet f=16 maxpool relu bn ts=256 bs=8 sgd step 200 lr=1e-1,[110, 160],0.2 m=0.9 wd=5e-4 dice fp=0.8
+loss=0.04367. acc=0.96788. bce=0.05829. jaccard=0.91647. dice=0.95633. tversky=0.95182. focal=0.000129.
+725 in=192 unet f=16 maxpool relu bn ts=256 bs=8 sgd step 200 lr=1e-1,[110, 160],0.2 m=0.9 wd=5e-4 dice fp=0.6
+loss=0.04816. acc=0.97564. bce=0.05369. jaccard=0.90920. dice=0.95184. tversky=0.94629. focal=0.000566.
+726 in=192 unet f=16 maxpool relu bn ts=256 bs=8 sgd step 200 lr=1e-1,[110, 160],0.2 m=0.9 wd=5e-4 dice fp=0.4
+loss=0.05371. acc=0.98408. bce=0.03582. jaccard=0.89849. dice=0.94629. tversky=0.94035. focal=0.000031.
+727 in=192 unet f=16 maxpool relu bn ts=256 bs=8 sgd step 200 lr=1e-1,[110, 160],0.2 m=0.9 wd=5e-4 dice fp=0.2
+loss=0.09342. acc=0.98983. bce=0.03486. jaccard=0.83219. dice=0.90658. tversky=0.89872. focal=0.000046.
 
+# unet, batch size, same epochs
+728 in=192 unet f=16 maxpool relu bn ts=256 bs=64 sgd step 200 lr=1e-1,[110, 160],0.2 m=0.9 wd=5e-4 dice fp=0.9
+loss=0.06963. acc=0.96096. bce=0.09252. jaccard=0.86982. dice=0.93036. tversky=0.92218. focal=0.000375.
+730 in=192 unet f=16 maxpool relu bn ts=256 bs=32 sgd step 200 lr=1e-1,[110, 160],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=7.37 minutes. 1600 iterations. loss=0.05342. acc=0.96272. bce=0.06928. jaccard=0.89863. dice=0.94658. tversky=0.94246. focal=0.000166.
+731 in=192 unet f=16 maxpool relu bn ts=256 bs=16 sgd step 200 lr=1e-1,[110, 160],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=6.82 minutes. 3200 iterations. loss=0.04294. acc=0.96522. bce=0.05306. jaccard=0.91772. dice=0.95706. tversky=0.95282. focal=0.000075.
+732 in=192 unet f=16 maxpool relu bn ts=256 bs=8 sgd step 200 lr=1e-1,[110, 160],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=6.64 minutes. 6400 iterations. loss=0.03782. acc=0.96721. bce=0.05748. jaccard=0.92722. dice=0.96218. tversky=0.95807. focal=0.000100.
+733 in=192 unet f=16 maxpool relu bn ts=256 bs=4 sgd step 200 lr=1e-1,[110, 160],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=6.54 minutes. 12800 iterations. loss=0.04017. acc=0.96698. bce=0.06157. jaccard=0.92314. dice=0.95983. tversky=0.95609. focal=0.000198.
+
+# unet, batch size, same iterations
+734 in=192 unet f=16 maxpool relu bn ts=1024 bs=64 sgd step 200 lr=1e-1,[110, 160],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=23.22 minutes. 3200 iterations. loss=0.03637. acc=0.9668. bce=0.04677. jaccard=0.9298. dice=0.9636. tversky=0.9601. focal=0.000050.
+735 in=192 unet f=16 maxpool relu bn ts=512 bs=32 sgd step 200 lr=1e-1,[110, 160],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=11.96 minutes. 3200 iterations. loss=0.03972. acc=0.9656. bce=0.05196. jaccard=0.9236. dice=0.9603. tversky=0.9567. focal=0.000071.
+736 in=192 unet f=16 maxpool relu bn ts=128 bs=8 sgd step 200 lr=1e-1,[110, 160],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=3.36 minutes. 3200 iterations. loss=0.04878. acc=0.9645. bce=0.06298. jaccard=0.9071. dice=0.9512. tversky=0.9466. focal=0.000137.
+737 in=192 unet f=16 maxpool relu bn ts=64 bs=4 sgd step 200 lr=1e-1,[110, 160],0.2 m=0.9 wd=5e-4 dice fp=0.9
+Duration=1.98 minutes. 3200 iterations. loss=0.06734. acc=0.9603. bce=0.09689. jaccard=0.8746. dice=0.9327. tversky=0.9256. focal=0.000741.
 
 # unet, optimizer
+747 in=192 unet f=16 maxpool relu bn ts=256 bs=8 sgd step 200 lr=1e-1,[120, 170],0.2 m=0.9 wd=5e-4 dice fp=0.9
+loss=0.03729. acc=0.9674. bce=0.05273. jaccard=0.9282. dice=0.9627. tversky=0.9594. focal=0.000078.
+752 in=192 unet f=16 maxpool relu bn ts=256 bs=8 rmsprop step 200 lr=1e-1,[120, 170],0.2 m=0.9 wd=5e-4 dice fp=0.9
+loss=0.07860. acc=0.9584. bce=0.11941. jaccard=0.8555. dice=0.9214. tversky=0.9134. focal=0.001010.
+748 in=192 unet f=16 maxpool relu bn ts=256 bs=8 adam step 200 lr=4e-3,[120, 170],0.2 m=0.9 wd=5e-4 dice fp=0.9
+loss=0.03492. acc=0.9668. bce=0.12290. jaccard=0.9326. dice=0.9651. tversky=0.9623. focal=0.000918.
+749 in=192 unet f=16 maxpool relu bn ts=256 bs=8 adamw step 200 lr=4e-3,[120, 170],0.2 m=0.9 wd=5e-4 dice fp=0.9
+loss=0.03630. acc=0.9674. bce=0.12131. jaccard=0.9301. dice=0.9637. tversky=0.9610. focal=0.000936.
+750 in=192 unet f=16 maxpool relu bn ts=256 bs=8 adagrad step 200 lr=1e-1,[120, 170],0.2 m=0.9 wd=5e-4 dice fp=0.9
+loss=0.05623. acc=0.9647. bce=0.06723. jaccard=0.8939. dice=0.9438. tversky=0.9387. focal=0.000187.
+
+# Loss Function - Dice Loss
+
+753 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adam step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 dice fp=0.9
+loss=0.03862. acc=0.9665. bce=0.13021. jaccard=0.9257. dice=0.9614. tversky=0.9580. focal=0.001005.
+754 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adam step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9
+loss=0.07266. acc=0.9669. bce=0.13252. jaccard=0.9273. dice=0.9623. tversky=0.9588. focal=0.001095.
+757 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adam step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 tversky(a.3b.7) fp=0.9
+loss=0.03887. acc=0.9646. bce=0.14442. jaccard=0.9173. dice=0.9568. tversky=0.9611. focal=0.001393.
+758 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adam step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 tversky(a.7b.3) fp=0.9
+loss=0.03466. acc=0.9637. bce=0.14951. jaccard=0.9114. dice=0.9536. tversky=0.9422. focal=0.001487.
+759 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adam step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 focal(a.5g2) fp=0.9
+loss=0.00005. acc=0.9620. bce=0.04455. jaccard=0.7971. dice=0.8869. tversky=0.8893. focal=0.000047.
+760 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adam step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 bce fp=0.9
+loss=0.02728. acc=0.9651. bce=0.02728. jaccard=0.8773. dice=0.9346. tversky=0.9347. focal=0.000010.
+761 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adam step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 dice+bce fp=0.9
+loss=0.07118. acc=0.9670. bce=0.02761. jaccard=0.9165. dice=0.9564. tversky=0.9541. focal=0.000011.
+762 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adam step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard+bce fp=0.9
+loss=0.12016. acc=0.9641. bce=0.03368. jaccard=0.9135. dice=0.9548. tversky=0.9518. focal=0.000021.
+763 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adam step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 dice+jaccard fp=0.9
+loss=0.11313. acc=0.9676. bce=0.13027. jaccard=0.9256. dice=0.9613. tversky=0.9575. focal=0.001026.
 
 
+# Performance
 
-# unet, Learning rate
+unet: 25.8ms, peak=1365 MB, total alloc=3004 MB
+unet_nested: 49.8ms, peak=4954 MB, total alloc=12368 MB
+unet_nested_deep: 55.4ms, peak=5257 MB, total alloc=12420 MB
 
+
+torch.cat must reallocate for each cat
+tensors are separate in memory?
+pre allocate tensors?
+
+
+Batch : 16
+Input Size : 256
+Patches per image : 165
+Total Pixels : 12330240
+Segmented Pixels : 10813440
+Coverage : 0.88%
+Forward Method | Latency (ms) | Batches/sec | Patches/sec | Images/sec
+eval (logits)  |      19.5913 |     51.0429 |    816.6870 |     4.9496 
+predict        |      22.1307 |     45.1861 |    722.9780 |     4.3817 
+predict w amp  |      17.1024 |     58.4715 |    935.5433 |     5.6700 
+
+Batch : 16
+Input Size : 384
+Patches per image : 70
+Total Pixels : 12330240
+Segmented Pixels : 10321920
+Coverage : 0.84%
+Forward Method | Latency (ms) | Batches/sec | Patches/sec | Images/sec
+eval (logits)  |      42.8635 |     23.3299 |    373.2779 |     5.3325 
+predict        |      47.5972 |     21.0096 |    336.1539 |     4.8022 
+predict w amp  |      37.9715 |     26.3356 |    421.3689 |     6.0196 
+
+Batch : 4
+Input Size : 512
+Patches per image : 35
+Total Pixels : 12330240
+Segmented Pixels : 9175040
+Coverage : 0.74%
+Forward Method | Latency (ms) | Batches/sec | Patches/sec | Images/sec
+eval (logits)  |      19.1569 |     52.2006 |    208.8023 |     5.9658 
+predict        |      22.1103 |     45.2277 |    180.9108 |     5.1689 
+predict w amp  |      18.6449 |     53.6341 |    214.5362 |     6.1296 
 

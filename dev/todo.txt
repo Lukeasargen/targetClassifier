@@ -4,6 +4,7 @@
 segment improve augmentations
 
 Gen- fixed the star generator, use a single polygon
+Gen - get_background, size arg, crops image randomly
 
 
 Papers to read

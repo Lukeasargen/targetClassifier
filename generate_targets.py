@@ -370,8 +370,8 @@ class TargetGenerator():
         img = img.resize((input_size, input_size))
         return img, label
 
-    def gen_segment(self, input_size=None, target_size=None, fill_prob=None,
-            target_transforms=None, bkg_path=None):
+    def gen_segment(self, input_size=None, target_size=None, scale=None,
+            fill_prob=None, target_transforms=None, bkg_path=None):
         """ Generate an aerial image with it's target mask.
             
             input_size:
@@ -389,6 +389,8 @@ class TargetGenerator():
             fill_prob = 0.5
         if bkg_path == None:
             bkg_path = self.bkg_path
+
+        assert input_size >= target_size
 
         # pick random gridsize based on input and target_size
         if isinstance(input_size, int):
@@ -421,7 +423,9 @@ class TargetGenerator():
         new_target_size = int(min(step_w, step_h))  # Largest target that can fit
         # print("new_target_size :", new_target_size)
 
-        new_scale = (1.0, target_size/new_target_size)  # New scale between the largest target and the smallest target
+        new_scale = (target_size/new_target_size, 1.0)  # New scale between the largest target and the smallest target
+        if scale:
+            new_scale = scale
         # print("new_scale :", new_scale)
 
         # This mask is first used to place all the targets, then converted into a binary image

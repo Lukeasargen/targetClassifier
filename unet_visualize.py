@@ -1,3 +1,4 @@
+import os
 
 import numpy as np  # Random selection
 from PIL import Image
@@ -6,21 +7,8 @@ import torchvision.transforms as T  # Image processing
 
 from generate_targets import TargetGenerator
 from models.unet import load_unet
-
-
-def load_old_unet(path, device):
-    model = old_UNet(in_channels=3, out_channels=1, features=16).to(device)
-    checkpoint = torch.load(path, map_location=device)
-    model.load_state_dict(checkpoint['model'])
-    model.eval()
-    # TODO : did this model use input normalization
-    set_mean = [0.4792167,  0.52474296, 0.27591285]
-    set_std = [0.17430544, 0.15489028, 0.151296  ]
-    transforms = T.Compose([
-        T.ToTensor(),
-        # T.Normalize(mean=set_mean, std=set_std)
-    ])
-    return model, transforms
+from metrics import dice_coeff, tversky_measure
+from helper import pil_loader
 
 
 def load_unet_regular(path, device):
@@ -36,13 +24,14 @@ if __name__ == "__main__":
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-    threshold = 0.5
+    threshold = 0.99
 
     # Dataset parameters
     input_size = 256
     bkg_path = 'backgrounds/validate'
     target_size = 20  # Smallest target size
-    fill_prob = 1.0
+    scale = None # (1.0, 1.0) # None=random scale
+    fill_prob = 0.9
     expansion_factor = 3  # generate higher resolution targets and downscale, improves aliasing effects
     target_transforms = T.Compose([
         T.RandomPerspective(distortion_scale=0.5, p=1.0, interpolation=Image.BICUBIC),
@@ -52,8 +41,8 @@ if __name__ == "__main__":
                 target_transforms=target_transforms, bkg_path=bkg_path)
 
     # Load model
-    first_model, first_transforms = load_unet_regular("runs/unet/run00703_final.pth", device)
-    second_model, second_transforms = load_unet_regular("runs/unet/run00704_final.pth", device)
+    first_model, first_transforms = load_unet_regular("runs/unet/run00748_final.pth", device)
+    second_model, second_transforms = load_unet_regular("runs/unet/run00749_final.pth", device)
 
     # Create the visual
     nrows = 4
@@ -62,31 +51,46 @@ if __name__ == "__main__":
     for i in range(nrows):
         row = []
         for j in range(ncols):
-            img, mask = gen.gen_segment(fill_prob=fill_prob)
+            print("Image {}. Fill={:.02f}".format(i, fill_prob))
+            img, mask = gen.gen_segment(scale=scale, fill_prob=fill_prob)
+            mask_ten = T.Compose([T.Grayscale(num_output_channels=1), T.ToTensor()])(mask).to(device)
 
+            # Process first model
             first_img = first_transforms(img).to(device).unsqueeze(0)
-            second_img = second_transforms(img).to(device).unsqueeze(0)
+            first_out = first_model.predict(first_img)
 
-            first_out = first_model.predict(first_img).detach().cpu().numpy()
-            second_out = second_model.predict(second_img).detach().cpu().numpy()
+            dice = dice_coeff(first_out, mask_ten)
+            tverskyfp = tversky_measure(first_out, mask_ten, alpha=1.0, beta=0.0)
+            tverskyfn = tversky_measure(first_out, mask_ten, alpha=0.0, beta=1.0)
+            print("Model 1 : dice={:.04f}. tversky(fp)={:.04f}. tversky(fn)={:.04f}.".format(dice, tverskyfp, tverskyfn))
 
-            row.append(img)
-
-            # Process old model
+            first_out = first_out.detach().cpu().numpy()
             first_preds = (np.repeat(first_out[0][:, :, :], 3, axis=0).transpose(1, 2, 0) > threshold)
+            row.append(img)
+            row.append(first_preds*255)  # multiple to 255 rgb scale
+
             first_fp_mask = ((1-np.array(mask)/255) * first_preds)
             first_fn_mask = (np.array(mask)/255 * (1-first_preds))
-            row.append(first_preds*255)  # multiple to 255 rgb scale
             row.append(first_fp_mask*img)
             row.append(first_fn_mask*img)
 
-            row.append(img)
 
-            # Process new model
+            # Process second model
+            second_img = second_transforms(img).to(device).unsqueeze(0)
+            second_out = second_model.predict(second_img)
+
+            dice = dice_coeff(second_out, mask_ten)
+            tverskyfp = tversky_measure(second_out, mask_ten, alpha=1.0, beta=0.0)
+            tverskyfn = tversky_measure(second_out, mask_ten, alpha=0.0, beta=1.0)
+            print("Model 2 : dice={:.04f}. tversky(fp)={:.04f}. tversky(fn)={:.04f}.".format(dice, tverskyfp, tverskyfn))
+
+            second_out = second_out.detach().cpu().numpy()
             second_preds = (np.repeat(second_out[0][:, :, :], 3, axis=0).transpose(1, 2, 0) > threshold)
+            row.append(img)
+            row.append(second_preds*255)  # multiple to 255 rgb scale
+
             second_fp_mask = ((1-np.array(mask)/255) * second_preds)
             second_fn_mask = (np.array(mask)/255 * (1-second_preds))
-            row.append(second_preds*255)  # multiple to 255 rgb scale
             row.append(second_fp_mask*img)
             row.append(second_fn_mask*img)
 
