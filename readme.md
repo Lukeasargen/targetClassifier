@@ -245,6 +245,7 @@ Optimizer is extremely important. So far only SGD with momentum has been used. F
 | Adagrad | 1e-2 | 94.38 | 89.39 | 96.47 | 93.87 | 0.00019 | 0.067 |
 
 ### Loss Function - Dice Loss
+Even though you can backprop through all these metrics, it is clear that some perform poorly. BCE and Focal losses perform worst and will not be used. Dice and Jaccard extremely high performance with slight differences. Tversky loss has parameters which can tune the models bias for false positives or false negatives; this loss performs well, but it will not be used due to poor understanding of the parameters. For further training, jaccard will be used. The final model will be trained on both losses for a final comparison.
 | Loss | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
 |-|-|-|-|-|-|-|
 | Jaccard | 96.23 | 92.73 | 96.69 | 95.88 | 0.00110 | 0.133 |
@@ -256,6 +257,12 @@ Optimizer is extremely important. So far only SGD with momentum has been used. F
 | Tversky(α=0.7,β=0.3) | 95.36 | 91.14 | 96.37 | 94.22 | 0.00149 | 0.150 |
 | BCE | 93.46 | 87.73 | 96.51 | 93.47 | 0.00001 | 0.027 |
 | Focal(α=0.5,γ=2) | 88.69 | 79.71 | 96.20 | 88.93 | 0.00005 | 0.045 |
+
+
+### Gaussian Noise on inputs
+| STD | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
+|-|-|-|-|-|-|-|
+| 0.00 |  |  |  |  |  |  |
 
 
 ## Segemenation Model 2 - UNet++

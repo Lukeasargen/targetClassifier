@@ -334,6 +334,19 @@ loss=0.12016. acc=0.9641. bce=0.03368. jaccard=0.9135. dice=0.9548. tversky=0.95
 loss=0.11313. acc=0.9676. bce=0.13027. jaccard=0.9256. dice=0.9613. tversky=0.9575. focal=0.001026.
 
 
+# Gaussian Noise
+795 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.00
+loss=0.05153. acc=0.9663. bce=0.14867. jaccard=0.9485. dice=0.9735. tversky=0.9716. focal=0.001465.
+796 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
+loss=0.05816. acc=0.9661. bce=0.15707. jaccard=0.9418. dice=0.9700. tversky=0.9670. focal=0.001752.
+798 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.02
+loss=0.05790. acc=0.9679. bce=0.17616. jaccard=0.9421. dice=0.9702. tversky=0.9674. focal=0.002384.
+799 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.03
+loss=0.06591. acc=0.9659. bce=0.16308. jaccard=0.9341. dice=0.9659. tversky=0.9624. focal=0.001947.
+
+
+
+
 # Performance
 
 unet: 25.8ms, peak=1365 MB, total alloc=3004 MB

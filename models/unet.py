@@ -238,8 +238,8 @@ class UNet(nn.Module):
     @torch.jit.export
     def predict(self, x):
         masks = self.forward(x)
-        logits = torch.mean(torch.cat(masks, dim=1), dim=1, keepdim=True)
-        return torch.sigmoid(logits)
+        pred = torch.mean(torch.cat([torch.sigmoid(m) for m in masks], dim=1), dim=1, keepdim=True)
+        return pred
 
 
 def train_test(model, device):
@@ -266,16 +266,16 @@ if __name__ == "__main__":
 
     in_channels = 3
     out_channels = 1
-    model_type = "unet"  # unet, unet_nested, unet_nested_deep
+    model_type = "unet_nested_deep"  # unet, unet_nested, unet_nested_deep
     filters = 16  # 16
     activation = "relu"  # relu, leaky_relu, silu, mish
 
-    batch_size = 8
-    input_size = 256
+    batch_size = 16
+    input_size = 192
 
     model = UNet(in_channels, out_channels, model_type, filters, activation, input_size=input_size).to(device)
 
-    # train_test(model, device)
+    train_test(model, device)
 
     x = torch.randn(batch_size, in_channels, input_size, input_size).to(device)
 

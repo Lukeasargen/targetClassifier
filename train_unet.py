@@ -54,20 +54,23 @@ def calc_loss(logits: torch.Tensor, targets: torch.Tensor):
 
     preds = torch.sigmoid(logits)
     jaccard_loss = 1.0 - jaccard_iou(preds, targets, smooth=1.0)
-    dice_loss = 1.0 - dice_coeff(preds, targets, smooth=1.0)
+    # dice_loss = 1.0 - dice_coeff(preds, targets, smooth=1.0)
     # tversky_loss = 1.0 - tversky_measure(preds, targets, alpha=0.3, beta=0.7, smooth=1.0)
 
-    return jaccard_loss + dice_loss
+    return jaccard_loss
 
 
 def loss_func(logits: List[torch.Tensor], targets: torch.Tensor):
     loss = torch.tensor(0.0, device=targets.device)
-    for l in logits:
-        loss += calc_loss(l, targets)
+    for i in range(len(logits)):
+        temp = calc_loss(logits[i], targets)
+        loss += temp
     return loss
 
 
 def calc_metrics(logits: torch.Tensor, targets: torch.Tensor):
+    logits = logits.float()
+    targets = targets.float()
     preds = torch.sigmoid(logits)
     metrics = {
         "acc": pixel_accuracy(preds, targets, threshold=0.5).item(),
@@ -86,6 +89,7 @@ if __name__ == "__main__":
     torch.manual_seed(MANUAL_SEED)
     torch.cuda.manual_seed(MANUAL_SEED)
     torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
     # Training data
     graph_metrics = True
@@ -96,7 +100,7 @@ if __name__ == "__main__":
     # Model Config
     in_channels = 3
     out_channels = 1
-    model_type = "unet"  # unet, unet_nested, unet_nested_deep
+    model_type = "unet_nested_deep"  # unet, unet_nested, unet_nested_deep
     filters = 16  # 16
     activation = "relu"  # relu, leaky_relu, silu, mish
 
@@ -106,14 +110,14 @@ if __name__ == "__main__":
     train_size = 256 # 8000
     batch_size = 16 # 4
     shuffle = False
-    num_workers = 6
+    num_workers = 4
     drop_last = False
 
     # Mixed precision
-    use_amp = False
+    use_amp = True
 
     # Optimization
-    optim_type = 'adam'  # sgd 1e-1, rmsprop 1e-3, adam 4e-3, adamw 4e-3, adagrad 1e-2
+    optim_type = 'adamw'  # sgd 1e-1, rmsprop 1e-3, adam 4e-3, adamw 4e-3, adagrad 1e-2
     base_lr = 4e-3  # 1e-1
     momentum = 0.9  # 0.9
     nesterov = True
@@ -128,15 +132,15 @@ if __name__ == "__main__":
     target_size = 20  # Smallest target size
     fill_prob = 0.9
     expansion_factor = 1  # generate higher resolution targets and downscale, improves aliasing effects
-    set_mean = [0, 0, 0]
-    set_std = [1, 1, 1]
+    set_mean = [0.5, 0.5, 0.5]
+    set_std = [0.5, 0.5, 0.5]
     target_transforms = T.Compose([
         T.RandomPerspective(distortion_scale=0.5, p=1.0, interpolation=Image.BICUBIC),
     ])
     train_transforms = T.Compose([
         CustomTransformation(),
         T.ToTensor(),
-        AddGaussianNoise(mean=0.5, std=0.08)
+        AddGaussianNoise(std=0.03)
     ])
     val_transforms = T.Compose([
         T.ToTensor(),
@@ -232,28 +236,29 @@ if __name__ == "__main__":
             data = data.to(device=device)
             true_masks = true_masks.to(device=device)
 
-            optimizer.zero_grad(set_to_none=True)  # TODO : set to true and test each optimizer
+            optimizer.zero_grad()  # TODO : test each optimizer for set_to_none=True
 
             if use_amp:
                 with amp.autocast():
-                    logits = model(data)
-                    loss = loss_func(logits, true_masks)
-                    scalar.scale(loss).backward()
-                    scalar.step(optimizer)
-                    scalar.update()
+                    with torch.autograd.detect_anomaly():
+                        logits = model(data)
+                        loss = loss_func(logits, true_masks)
+                        scalar.scale(loss).backward()
+                        scalar.step(optimizer)
+                        scalar.update()
             else:
                 logits = model(data)
                 loss = loss_func(logits, true_masks)
                 loss.backward()
+                optimizer.step()
 
-            optimizer.step()
             iterations += 1
 
             # TODO : Validation
             # model.eval()
 
-            # Update running metrics
-            logits = torch.mean(torch.cat(logits, dim=1), dim=1, keepdim=True)
+            # Update running metrics           
+            logits = torch.mean(torch.cat([torch.sigmoid(l) for l in logits], dim=1), dim=1, keepdim=True)
             batch_metrics = calc_metrics(logits, true_masks)
             epoch_loss_total += loss.item()
             batch_metrics_total += Counter(batch_metrics)
