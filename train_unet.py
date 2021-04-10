@@ -60,18 +60,11 @@ def calc_loss(logits: torch.Tensor, targets: torch.Tensor):
     return jaccard_loss
 
 
-def loss_func(logits: List[torch.Tensor], targets: torch.Tensor):
-    loss = torch.tensor(0.0, device=targets.device)
-    for i in range(len(logits)):
-        temp = calc_loss(logits[i], targets)
-        loss += temp
-    return loss
-
-
 def calc_metrics(logits: torch.Tensor, targets: torch.Tensor):
-    logits = logits.float()
-    targets = targets.float()
     preds = torch.sigmoid(logits)
+    # logits = logits.float()
+    # preds = preds.float()
+    # targets = targets.float()
     metrics = {
         "acc": pixel_accuracy(preds, targets, threshold=0.5).item(),
         "bce": F.binary_cross_entropy_with_logits(logits, targets).item(),
@@ -101,20 +94,20 @@ if __name__ == "__main__":
     in_channels = 3
     out_channels = 1
     model_type = "unet_nested_deep"  # unet, unet_nested, unet_nested_deep
-    filters = 16  # 16
+    filters = 8  # 16
     activation = "relu"  # relu, leaky_relu, silu, mish
 
     # Training Hyperparameters
-    input_size = 192 # 400
+    input_size = 256 # 400
     num_epochs = 280 # 20
-    train_size = 256 # 8000
-    batch_size = 16 # 4
+    train_size = 512 # 8000
+    batch_size = 32 # 4
     shuffle = False
-    num_workers = 4
+    num_workers = 6
     drop_last = False
 
     # Mixed precision
-    use_amp = True
+    use_amp = False
 
     # Optimization
     optim_type = 'adamw'  # sgd 1e-1, rmsprop 1e-3, adam 4e-3, adamw 4e-3, adagrad 1e-2
@@ -140,12 +133,12 @@ if __name__ == "__main__":
     train_transforms = T.Compose([
         CustomTransformation(),
         T.ToTensor(),
-        AddGaussianNoise(std=0.03)
+        AddGaussianNoise(std=0.01)
     ])
     val_transforms = T.Compose([
         T.ToTensor(),
     ])
-    
+
     # Prepare datasets
     train_dataset = LiveSegmentDataset(length=train_size,
         input_size=input_size, target_size=target_size,
@@ -240,15 +233,15 @@ if __name__ == "__main__":
 
             if use_amp:
                 with amp.autocast():
-                    with torch.autograd.detect_anomaly():
-                        logits = model(data)
-                        loss = loss_func(logits, true_masks)
-                        scalar.scale(loss).backward()
-                        scalar.step(optimizer)
-                        scalar.update()
+                    # with torch.autograd.detect_anomaly():
+                    logits = model(data)
+                    loss = calc_loss(logits, true_masks)
+                scalar.scale(loss).backward()
+                scalar.step(optimizer)
+                scalar.update()
             else:
                 logits = model(data)
-                loss = loss_func(logits, true_masks)
+                loss = calc_loss(logits, true_masks)
                 loss.backward()
                 optimizer.step()
 
@@ -258,7 +251,6 @@ if __name__ == "__main__":
             # model.eval()
 
             # Update running metrics           
-            logits = torch.mean(torch.cat([torch.sigmoid(l) for l in logits], dim=1), dim=1, keepdim=True)
             batch_metrics = calc_metrics(logits, true_masks)
             epoch_loss_total += loss.item()
             batch_metrics_total += Counter(batch_metrics)

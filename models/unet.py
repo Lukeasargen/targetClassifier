@@ -78,8 +78,8 @@ class Down(nn.Module):
 class Up(nn.Module):
     def __init__(self, in_channels, out_channels, activation=None):
         super().__init__()
-        self.up = nn.ConvTranspose2d(in_channels, in_channels//2, kernel_size=2, stride=2)
-        self.conv = DoubleConv(in_channels, out_channels, activation=activation)
+        self.up = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2)
+        self.conv = DoubleConv(2*out_channels, out_channels, activation=activation)
 
     def forward(self, encoder_features: torch.Tensor, decoder_features: torch.Tensor):
         decoder_features = self.up(decoder_features)
@@ -121,7 +121,7 @@ class UNetDecoder(nn.Module):
         x = self.up2(x20, x)
         x = self.up3(x10, x)
         x = self.up4(x00, x)
-        return [self.out(x)]
+        return self.out(x)
 
 
 class UNetNestedDecoder(nn.Module):
@@ -171,10 +171,8 @@ class UNetNestedDecoder(nn.Module):
             l1 = self.ds01(x01)
             l2 = self.ds02(x02)
             l3 = self.ds03(x03)
-            # Return all masks
-            return [l1, l2, l3, out]
-        else:
-            return [out]
+            out = (l1 + l2 + l3 + out) / 4.0
+        return out
 
 class UNet(nn.Module):
     def __init__(self, in_channels=3, out_channels=1, model_type='unet', filters=16, 
@@ -189,6 +187,7 @@ class UNet(nn.Module):
             "model_type": model_type, "filters": filters, "activation": activation} 
         if type(filters) == int:
             filters = [filters, filters*2, filters*4, filters*8, filters*16]
+        assert len(filters)==5
 
         self.encoder = UNetEncoder(in_channels, out_channels, filters, activation)
 
@@ -237,9 +236,8 @@ class UNet(nn.Module):
     
     @torch.jit.export
     def predict(self, x):
-        masks = self.forward(x)
-        pred = torch.mean(torch.cat([torch.sigmoid(m) for m in masks], dim=1), dim=1, keepdim=True)
-        return pred
+        logits = self.forward(x)
+        return torch.sigmoid(logits)
 
 
 def train_test(model, device):
@@ -253,11 +251,25 @@ def train_test(model, device):
         opt.zero_grad()
         logits = model(x)
         loss = 0.0
-        for l in logits:
-            loss += nn.BCEWithLogitsLoss()(l, y)
+        loss += nn.BCEWithLogitsLoss()(logits, y)
         loss.backward()
         opt.step()
         print(loss.item())
+
+
+def profile_model(model, x):
+    warmup = 3
+    model.eval()
+    for i in range(warmup):
+        out = model.predict(x)
+    import torch.autograd.profiler as profiler
+    with profiler.profile(use_cuda=True, profile_memory=True) as prof:
+        out = model.predict(x)
+    # print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
+    # print(prof.key_averages().table(sort_by="cpu_memory_usage", row_limit=10))
+    print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=16))
+    print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=16))
+    print(torch.cuda.memory_summary())
 
 
 if __name__ == "__main__":
@@ -266,23 +278,23 @@ if __name__ == "__main__":
 
     in_channels = 3
     out_channels = 1
-    model_type = "unet_nested_deep"  # unet, unet_nested, unet_nested_deep
-    filters = 16  # 16
+    model_type = "unet"  # unet, unet_nested, unet_nested_deep
+    filters = 8 #[8, 12, 16, 20, 24] # 16
     activation = "relu"  # relu, leaky_relu, silu, mish
 
-    batch_size = 16
-    input_size = 192
+    batch_size = 1
+    input_size = 256
 
     model = UNet(in_channels, out_channels, model_type, filters, activation, input_size=input_size).to(device)
 
-    train_test(model, device)
+    # train_test(model, device)
 
     x = torch.randn(batch_size, in_channels, input_size, input_size).to(device)
 
-    # model.train()
-    # model.freeze_norm()
-    # logits = model(x)
-    # print("logits :", type(logits))
+    model.train()
+    model.freeze_norm()
+    logits = model(x)
+    print("logits :", logits.shape, torch.min(logits).item(), torch.max(logits).item())
     # predict = model.predict(x)
     # print("predict :", predict.shape, torch.min(predict).item(), torch.max(predict).item())
     
@@ -291,29 +303,11 @@ if __name__ == "__main__":
     # scripted.train()
     # scripted.freeze_norm()
     # logits = scripted(x)
-    # print("logits :", type(logits))
+    # print("logits :", logits.shape, torch.min(logits).item(), torch.max(logits).item())
     # predict = scripted.predict(x)
     # print("predict :", predict.shape, torch.min(predict).item(), torch.max(predict).item())
 
-    warmup = 3
-    model.eval()
-    for i in range(warmup):
-        out = model.predict(x)
-
-    import torch.autograd.profiler as profiler
-    with profiler.profile(use_cuda=True, profile_memory=True) as prof:
-        out = model.predict(x)
-    
-    # print(prof.key_averages().table(sort_by="cpu_time_total", row_limit=10))
-    # print(prof.key_averages().table(sort_by="cpu_memory_usage", row_limit=10))
-
-    print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=16))
-    print(prof.key_averages().table(sort_by="cuda_memory_usage", row_limit=16))
-
-    # print(prof.key_averages())
-
-    print(torch.cuda.memory_summary())
-
+    # profile_model(model, x)
 
     # from torchviz import make_dot
     # dot = make_dot(model(x), params=dict(list(model.named_parameters()) + [('x', x)]))
@@ -326,16 +320,13 @@ if __name__ == "__main__":
     # print(out.shape, torch.min(out).item(), torch.max(out).item())
 
 
-    # from torchsummary import summary
-    # summary(model.to(device), (in_channels, input_size, input_size))
-
-    # from pytorch_model_summary import summary  # git clone https://github.com/amarczew/pytorch_model_summary.git
-    # summary(model,
-    #         torch.zeros(1, in_channels, input_size, input_size).to(device),
-    #         batch_size=1,
-    #         show_input=False,  # Input shape or output shape
-    #         show_hierarchical=False, 
-    #         print_summary=True,  # calls print before returning
-    #         max_depth=1,  # None searchs max depth
-    #         show_parent_layers=True
-    #         )
+    from pytorch_model_summary import summary  # git clone https://github.com/amarczew/pytorch_model_summary.git
+    summary(model,
+            torch.zeros(1, in_channels, input_size, input_size).to(device),
+            batch_size=1,
+            show_input=False,  # Input shape or output shape
+            show_hierarchical=False, 
+            print_summary=True,  # calls print before returning
+            max_depth=1,  # None searchs max depth
+            show_parent_layers=True
+            )
