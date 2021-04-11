@@ -76,10 +76,11 @@ class Down(nn.Module):
 
 
 class Up(nn.Module):
-    def __init__(self, in_channels, out_channels, activation=None):
+    def __init__(self, in_channels, out_channels, mid_channels=None, activation=None):
         super().__init__()
+        mid_channels = mid_channels if mid_channels else 2*out_channels
         self.up = nn.ConvTranspose2d(in_channels, out_channels, kernel_size=2, stride=2)
-        self.conv = DoubleConv(2*out_channels, out_channels, activation=activation)
+        self.conv = DoubleConv(mid_channels, out_channels, activation=activation)
 
     def forward(self, encoder_features: torch.Tensor, decoder_features: torch.Tensor):
         decoder_features = self.up(decoder_features)
@@ -129,19 +130,19 @@ class UNetNestedDecoder(nn.Module):
         super(UNetNestedDecoder, self).__init__()
         self.deep = deep
         # L1
-        self.up01 = Up(filters[1], filters[0], activation=activation)
+        self.up01 = Up(filters[1], filters[0], filters[0]*2, activation=activation)
         # L2
-        self.up11 = Up(filters[2], filters[1], activation=activation)
-        self.up02 = Up(filters[1]*2, filters[0], activation=activation)
+        self.up11 = Up(filters[2], filters[1], filters[1]*2, activation=activation)
+        self.up02 = Up(filters[1]*2, filters[0], filters[0]*3, activation=activation)
         # L3
-        self.up21 = Up(filters[3], filters[2], activation=activation)
-        self.up12 = Up(filters[2]*2, filters[1], activation=activation)
-        self.up03 = Up(filters[1]*3, filters[0], activation=activation)
+        self.up21 = Up(filters[3], filters[2], filters[2]*2, activation=activation)
+        self.up12 = Up(filters[2]*2, filters[1], filters[1]*3, activation=activation)
+        self.up03 = Up(filters[1]*3, filters[0], filters[0]*4, activation=activation)
         # L4
-        self.up31 = Up(filters[4], filters[3], activation=activation)
-        self.up22 = Up(filters[3]*2, filters[2], activation=activation)
-        self.up13 = Up(filters[2]*3, filters[1], activation=activation)
-        self.up04 = Up(filters[1]*4, filters[0], activation=activation)
+        self.up31 = Up(filters[4], filters[3], filters[3]*2, activation=activation)
+        self.up22 = Up(filters[3]*2, filters[2], filters[2]*3, activation=activation)
+        self.up13 = Up(filters[2]*3, filters[1], filters[1]*4, activation=activation)
+        self.up04 = Up(filters[1]*4, filters[0], filters[0]*5, activation=activation)
         # Deep supervision
         self.ds01 = nn.Conv2d(filters[0]*2, out_channels, kernel_size=1)
         self.ds02 = nn.Conv2d(filters[0]*3, out_channels, kernel_size=1)
@@ -278,8 +279,8 @@ if __name__ == "__main__":
 
     in_channels = 3
     out_channels = 1
-    model_type = "unet"  # unet, unet_nested, unet_nested_deep
-    filters = 8 #[8, 12, 16, 20, 24] # 16
+    model_type = "unet_nested"  # unet, unet_nested, unet_nested_deep
+    filters = [8, 16, 24, 32, 40] # 16
     activation = "relu"  # relu, leaky_relu, silu, mish
 
     batch_size = 1
@@ -320,13 +321,13 @@ if __name__ == "__main__":
     # print(out.shape, torch.min(out).item(), torch.max(out).item())
 
 
-    from pytorch_model_summary import summary  # git clone https://github.com/amarczew/pytorch_model_summary.git
-    summary(model,
-            torch.zeros(1, in_channels, input_size, input_size).to(device),
-            batch_size=1,
-            show_input=False,  # Input shape or output shape
-            show_hierarchical=False, 
-            print_summary=True,  # calls print before returning
-            max_depth=1,  # None searchs max depth
-            show_parent_layers=True
-            )
+    # from pytorch_model_summary import summary  # git clone https://github.com/amarczew/pytorch_model_summary.git
+    # summary(model,
+    #         torch.zeros(1, in_channels, input_size, input_size).to(device),
+    #         batch_size=1,
+    #         show_input=False,  # Input shape or output shape
+    #         show_hierarchical=False, 
+    #         print_summary=True,  # calls print before returning
+    #         max_depth=1,  # None searchs max depth
+    #         show_parent_layers=True
+    #         )

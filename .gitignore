@@ -3,6 +3,8 @@ __pycache__
 *.pyc
 .ipynb_checkpoints
 
+.vscode
+
 # Too many files
 /backgrounds/
 
