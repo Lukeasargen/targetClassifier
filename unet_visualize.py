@@ -7,7 +7,7 @@ import torchvision.transforms as T  # Image processing
 
 from generate_targets import TargetGenerator
 from models.unet import load_unet
-from metrics import dice_coeff, tversky_measure
+from metrics import dice_coeff, tversky_measure, jaccard_iou
 from helper import pil_loader
 
 
@@ -31,18 +31,18 @@ if __name__ == "__main__":
     bkg_path = 'backgrounds/validate'
     target_size = 20  # Smallest target size
     scale = None # (1.0, 1.0) # None=random scale
-    fill_prob = 0.9
+    fill_prob = 0.5
     expansion_factor = 3  # generate higher resolution targets and downscale, improves aliasing effects
     target_transforms = T.Compose([
-        T.RandomPerspective(distortion_scale=0.5, p=1.0, interpolation=Image.BICUBIC),
+        T.RandomPerspective(distortion_scale=0.5, p=1.0),
     ])
     gen = TargetGenerator(input_size=input_size,
                 target_size=target_size, expansion_factor=expansion_factor,
                 target_transforms=target_transforms, bkg_path=bkg_path)
 
     # Load model
-    first_model, first_transforms = load_unet_regular("runs/unet/run00748_final.pth", device)
-    second_model, second_transforms = load_unet_regular("runs/unet/run00749_final.pth", device)
+    first_model, first_transforms = load_unet_regular("runs/unet/run00863_final.pth", device)
+    second_model, second_transforms = load_unet_regular("runs/unet/run00842_final.pth", device)
 
     # Create the visual
     nrows = 4
@@ -60,9 +60,10 @@ if __name__ == "__main__":
             first_out = first_model.predict(first_img)
 
             dice = dice_coeff(first_out, mask_ten)
+            jaccard = jaccard_iou(first_out, mask_ten)
             tverskyfp = tversky_measure(first_out, mask_ten, alpha=1.0, beta=0.0)
             tverskyfn = tversky_measure(first_out, mask_ten, alpha=0.0, beta=1.0)
-            print("Model 1 : dice={:.04f}. tversky(fp)={:.04f}. tversky(fn)={:.04f}.".format(dice, tverskyfp, tverskyfn))
+            print("Model 1 : dice={:.04f}. jaccard={:.04f}. tversky(fp)={:.04f}. tversky(fn)={:.04f}.".format(dice, jaccard, tverskyfp, tverskyfn))
 
             first_out = first_out.detach().cpu().numpy()
             first_preds = (np.repeat(first_out[0][:, :, :], 3, axis=0).transpose(1, 2, 0) > threshold)
@@ -80,9 +81,10 @@ if __name__ == "__main__":
             second_out = second_model.predict(second_img)
 
             dice = dice_coeff(second_out, mask_ten)
+            jaccard = jaccard_iou(second_out, mask_ten)
             tverskyfp = tversky_measure(second_out, mask_ten, alpha=1.0, beta=0.0)
             tverskyfn = tversky_measure(second_out, mask_ten, alpha=0.0, beta=1.0)
-            print("Model 2 : dice={:.04f}. tversky(fp)={:.04f}. tversky(fn)={:.04f}.".format(dice, tverskyfp, tverskyfn))
+            print("Model 2 : dice={:.04f}. jaccard={:.04f}. tversky(fp)={:.04f}. tversky(fn)={:.04f}.".format(dice, jaccard, tverskyfp, tverskyfn))
 
             second_out = second_out.detach().cpu().numpy()
             second_preds = (np.repeat(second_out[0][:, :, :], 3, axis=0).transpose(1, 2, 0) > threshold)

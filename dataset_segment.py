@@ -99,7 +99,7 @@ def time_dataloader(dataset, batch_size=64, max_num_workers=8, num=4096):
         max_ram = 0
         ts = time.time()
         [_ for _ in train_loader]
-        print(time.time()-ts)
+        print("Warmup epoch :", time.time()-ts)
         t0 = time.time()
         for batch_idx, (data, target) in enumerate(train_loader):
             r = psutil.virtual_memory()[3]
@@ -112,12 +112,12 @@ def time_dataloader(dataset, batch_size=64, max_num_workers=8, num=4096):
         ram.append(ram_usage)
 
     for i in range(len(results)):
-        print("{:.2f} seconds with {} workers. {:.2f} seconds per {} batches. {:.3f} GB ram.".format(results[i], i, results[i]/(batch_idx+1), batch_idx+1, ram[i]*1e-9))
+        print("{:.2f} seconds with {} workers. {:.3f} seconds/batches. {} batches. {:.2f} GB ram.".format(results[i], i, results[i]/(batch_idx+1), batch_idx+1, ram[i]*1e-9))
 
 
 if __name__ == "__main__":
 
-    input_size = 512
+    input_size = 256
 
     train_size = 256
     batch_size = 8
@@ -131,14 +131,14 @@ if __name__ == "__main__":
     fill_prob = 0.5
     expansion_factor = 1  # generate higher resolution targets and downscale, improves aliasing effects
     target_transforms = T.Compose([
-        T.RandomPerspective(distortion_scale=0.5, p=1.0, interpolation=Image.BICUBIC),
+        T.RandomPerspective(distortion_scale=0.5, p=1.0),
     ])
 
     train_transforms = T.Compose([
         CustomTransformation(),
         T.Resize((input_size)),  # Make shortest edge this size
         T.ToTensor(),
-        AddGaussianNoise(mean=0.0, std=0.05)
+        AddGaussianNoise(std=0.01)
     ])
     val_transforms = T.Compose([
         T.Resize((input_size)),  # Make shortest edge this size
@@ -164,10 +164,10 @@ if __name__ == "__main__":
     x = (x - torch.min(x)) / (torch.max(x) - torch.min(x))
 
     im = T.ToPILImage(mode='RGB')(x)
-    im.show()
+    # im.show()
 
     # visualize_dataloader(train_loader)  # use batch_size = 8
 
     # dataset_stats(train_dataset, num=1000)
 
-    # time_dataloader(train_dataset, batch_size=8, max_num_workers=8, num=1024)
+    time_dataloader(train_dataset, batch_size=16, max_num_workers=8, num=256)

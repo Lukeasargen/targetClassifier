@@ -269,7 +269,7 @@ if __name__ == "__main__":
     rotation = True
     expansion_factor = 2  # generate higher resolution targets and downscale, improves aliasing effects
     target_transforms = T.Compose([
-        T.RandomPerspective(distortion_scale=0.5, p=1.0, interpolation=Image.BICUBIC),
+        T.RandomPerspective(distortion_scale=0.5, p=1.0),
     ])
 
     train_transforms = T.Compose([

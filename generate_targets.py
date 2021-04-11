@@ -362,7 +362,7 @@ class TargetGenerator():
                             rotation=rotation, target_transforms=target_transforms, bkg_path=bkg_path)
         if bkg_path:
             bkg = self.get_background()
-            img = T.RandomResizedCrop(input_size*self.expansion_factor, scale=(0.08, 1.0), ratio=(3./4., 4./3.), interpolation=Image.NEAREST)(bkg)
+            img = T.RandomResizedCrop(input_size*self.expansion_factor, scale=(0.08, 1.0), ratio=(3./4., 4./3.))(bkg)
             img.paste(target, None, target)  # Alpha channel is the mask
         else:
             img = target.convert("RGB")  # return the target
@@ -453,7 +453,7 @@ class TargetGenerator():
 
         if bkg_path:
             bkg = self.get_background()
-            img = T.RandomResizedCrop(size=(bkg_h*self.expansion_factor, bkg_w*self.expansion_factor), scale=(0.08, 1.0), ratio=(3./4., 4./3.), interpolation=Image.NEAREST)(bkg)
+            img = T.RandomResizedCrop(size=(bkg_h*self.expansion_factor, bkg_w*self.expansion_factor), scale=(0.08, 1.0), ratio=(3./4., 4./3.))(bkg)
             img.paste(mask, None, mask)  # Alpha channel is the mask
         else:
             img = mask.convert("RGB")  # return the mask in rgb
@@ -514,7 +514,7 @@ if __name__ == "__main__":
     expansion_factor = 3  # generate higher resolution targets and downscale, improves aliasing effects
 
     target_tranforms = T.Compose([
-        T.RandomPerspective(distortion_scale=0.5, p=1.0, interpolation=Image.BICUBIC),
+        T.RandomPerspective(distortion_scale=0.5, p=1.0),
     ])
 
     # create the generator object
