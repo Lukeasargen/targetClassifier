@@ -159,8 +159,6 @@ Ronneberger, Olaf, Philipp Fischer, and Thomas Brox. "U-Net: Convolutional Netwo
 
 Our implementation matches the UNet paper with the addition of batchnorm and different activation functions.
 
-![unet_graph](/images/readme/unet_graph.png)
-
 Example of the metrics from a training run:
 
 ![unet_run](/images/readme/unet_run.png)
@@ -183,32 +181,21 @@ For **downsampling**, **maxpool** gives best results. (Relu activation)
 Since the model needs to be fast, choosing the right **filter** count is important. **16 filters** was choosen. The same inference time for filters between 2 and 16 is assumed to be other opertations in the data pipline and time spent in the model is extremely low. (Relu activation)
 | Filters | Inference (ms) | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
 |-|-|-|-|-|-|-|-|
-| 2 | 2.58 | 92.39 | 85.93 | 95.98 | 92.18 | 0.00063 | 0.094 |
-| 4 | 2.58 | 94.49 | 89.58 | 96.58 | 94.21 | 0.00033 | 0.083 |
-| 8 | 2.58 | 96.62 | 93.48 | 96.78 | 96.10 | 0.00013 | 0.050 |
-| 16 | 2.58 | 96.98 | 94.14 | 96.89 | 96.52 | 0.00005 | 0.045 |
-| 32 | 3.75 | 97.30 | 94.74 | 96.47 | 96.95 | 0.00005 | 0.044 |
-| 64 | 10.61 | 97.57 | 95.26 | 96.90 | 97.26 | 0.00002 | 0.034 |
+| 2 | 2.75 | 92.39 | 85.93 | 95.98 | 92.18 | 0.00063 | 0.094 |
+| 4 | 2.78 | 94.49 | 89.58 | 96.58 | 94.21 | 0.00033 | 0.083 |
+| 8 | 2.78 | 96.62 | 93.48 | 96.78 | 96.10 | 0.00013 | 0.050 |
+| 16 | 2.75 | 96.98 | 94.14 | 96.89 | 96.52 | 0.00005 | 0.045 |
+| 32 | 3.81 | 97.30 | 94.74 | 96.47 | 96.95 | 0.00005 | 0.044 |
+| 64 | 10.63 | 97.57 | 95.26 | 96.90 | 97.26 | 0.00002 | 0.034 |
 
 ### Activation - Relu
-**Activation** effects accuracy and inference speed. Relu and Mish had the best scores. Silu has lowest overall inference time, but it's poor performance excludes it. Leaky relu with a negative slope of 0.2 was tested; it is possible to tune the negative slope or use PRelu, but the results from Relu and Mish are sufficient so this was not explored. **Relu is planned to be used in the final model.** Mish is still being considered if the final pipeline can run with Mish and not bottleneck.
+**Activation** effects accuracy and inference speed. Silu and Mish had the best scores. Leaky relu with a negative slope of 0.2 was tested; it is possible to tune the negative slope or use PRelu, but the results from Relu, Silu, and Mish are sufficient so this was not explored. **Relu is planned to be used in the final model.** Silu and Mish are still being considered if the final pipeline can run with bottlenecking at the model.
 | Activation | Inference (ms) | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
 |-|-|-|-|-|-|-|-|
-| Relu | 2.53 | 97.38 | 94.89 | 96.86 | 97.05 | 0.00004 | 0.042 |
-| Leaky | 2.57 | 95.67 | 92.28 | 96.32 | 95.57 | 0.00012 | 0.057 |
-| Silu | 2.29 | 92.97 | 86.91 | 96.19 | 92.18 | 0.00076 | 0.070 |
-| Mish | 3.01 | 97.15 | 94.46 | 96.83 | 96.73 | 0.00004 | 0.042 |
-
-### Input Size - 192
-Since the data is generated at train time, the **input size** is a cpu bottleneck. Previous experiments used 256, but **192** gives comparable results and training time is reasonable. It is clear that the model improves with increased input size. A final production model will be trained with the largest image size that can fit on the GPU.
-| Input Size | Model Speed (ms) | Training Duration (Minutes) | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
-|-|-|-|-|-|-|-|-|-|
-| 512 | 12.99 | 40.14 | 96.38 | 93.03 | 96.61 | 96.04 | 0.00013 | 0.056 |
-| 384 | 8.38 | 23.30 | 96.09 | 92.48 | 96.44 | 95.77 | 0.00009 | 0.056 |
-| 320 | 6.59 | 16.82 | 96.31 | 92.90 | 96.36 | 96.00 | 0.00008 | 0.053 |
-| 256 | 5.24 | 9.81 | 96.10 | 92.50 | 96.67 | 95.70 | 0.00011 | 0.057 |
-| 192 | 5.23 | 5.90 | 95.90 | 92.13 | 96.71 | 95.54 | 0.00011 | 0.058 |
-| 128 | 5.23 | 3.12 | 95.52 | 91.44 | 96.56 | 95.13 | 0.00013 | 0.062 |
+| Relu | 2.71 | 97.52 | 95.17 | 96.82 | 97.34 | 0.00111 | 0.135 |
+| Leaky | 2.72 | 97.45 | 95.03 | 96.83 | 97.26 | 0.00112 | 0.135 |
+| Silu | 3.02 | 97.59 | 95.29 | 96.90 | 97.44 | 0.00080 | 0.121 |
+| Mish | 3.28 | 97.55 | 95.22 | 96.91 | 97.40 | 0.00081 | 0.120 |
 
 ### Batch Size - Large as possible
 
@@ -244,8 +231,8 @@ Optimizer is extremely important. So far only SGD with momentum has been used. F
 | AdamW | 4e-3 | 96.37 | 93.01 | 96.74 | 96.20 | 0.00094 | 0.121 |
 | Adagrad | 1e-2 | 94.38 | 89.39 | 96.47 | 93.87 | 0.00019 | 0.067 |
 
-### Loss Function - Dice Loss
-Even though you can backprop through all these metrics, it is clear that some perform poorly. BCE and Focal losses perform worst and will not be used. Dice and Jaccard extremely high performance with slight differences. Tversky loss has parameters which can tune the models bias for false positives or false negatives; this loss performs well, but it will not be used due to poor understanding of the parameters. For further training, jaccard will be used. The final model will be trained on both losses for a final comparison.
+### Loss Function - Jaccard Loss (IOU)
+Even though you can backprop through all these metrics, it is clear that some perform poorly. BCE and Focal losses perform worst and will not be used. Dice and Jaccard extremely high performance with slight differences. Tversky loss has parameters which can tune the models bias for false positives or false negatives; this loss performs well, but it will not be used due to poor understanding of the parameters. **For further training, jaccard will be used.** The final model will be trained on both losses for a final comparison.
 | Loss | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
 |-|-|-|-|-|-|-|
 | Jaccard | 96.23 | 92.73 | 96.69 | 95.88 | 0.00110 | 0.133 |
@@ -275,8 +262,6 @@ Our implementation matches the UNet++ paper as closely as possible. The same tra
 
 The UNet++ implementation can be used with and without deep supervision with models called "unet_nested" and "unet_nested_deep", respectively.
 
-![unet_nested_deep_graph](/images/readme/unet_nested_deep_graph.png)
-
 Example of the metrics from a training run:
 
 ![unet_nested_run](/images/readme/unet_nested_run.png)
@@ -287,14 +272,17 @@ UNet++ improves the UNet architecture in multiple ways: 1) **ensembles of UNets*
 
 ### Deep Supervision
 To test which model architecture would improve the task, several versions were trained and the results are in the table below. DS = Deep Supervision.
-| Model | Inference (ms) | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
-|-|-|-|-|-|-|-|-|
-| UNet (Relu) | 2.53 | 97.30 | 94.75 | 97.00 | 97.09 | 0.000033 | 0.039 |
-| UNet (Mish) | 3.01 | 97.11 | 94.38 | 96.75 | 96.91 | 0.000045 | 0.044 |
-| UNet++ (Relu) | 6.08 | 97.14 | 94.44 | 96.69 | 96.94 | 0.000047 | 0.044 |
-| UNet++ (Mish) | 6.79 | 97.10 | 94.37 | 96.63 | 96.90 | 0.000058 | 0.047 |
-| UNet++ (Relu, DS) | 6.27 | 97.09 | 94.34 | 96.85 | 96.79 | 0.000049 | 0.044 |
-| UNet++ (Mish, DS) | 7.09 | 96.96 | 94.11 | 96.75 | 96.64 | 0.000069 | 0.048 |
+| Model | Filters | Inference (ms) | Dice | Jaccard | Accuracy(>0.5) | Tversky(α=0.3,β=0.7) | Focal(α=0.5,γ=2) | BCE |
+|-|-|-|-|-|-|-|-|-|
+| UNet (Relu) | 8 | 2.16 | 96.91 | 94.01 | 96.99 | 96.65 | 0.000445 | 0.098 |
+| UNet (Relu) | 16 | 2.19 | 97.35 | 94.84 | 97.08 | 97.16 | 0.000785 | 0.120 |
+| UNet (Relu) | 32 | 2.63 | 97.29 | 94.72 | 97.06 | 97.08 | 0.001258 | 0.140 |
+| UNet++ (Relu) | 8 | 4.00 | 97.23 | 94.61 | 97.01 | 97.02 | 0.000921 | 0.122 |
+| UNet++ (Relu) | 16 | 4.07 | 97.44 | 95.01 | 97.10 | 97.27 | 0.001920 | 0.164 |
+| UNet++ (Relu) | 32 | 6.51 | 97.45 | 95.03 | 97.15 | 97.27 | 0.001871 | 0.161 |
+| UNet++ (Relu, DS) | 8 | 4.17 | 97.12 | 94.41 | 96.96 | 96.91 | 0.000533 | 0.105 |
+| UNet++ (Relu, DS) | 16 | 4.21 | 97.55 | 95.21 | 97.27 | 97.39 | 0.000832 | 0.122 |
+| UNet++ (Relu, DS) | 32 | 6.71 | 97.44 | 95.01 | 97.23 | 97.28 | 0.000631 | 0.111 |
 
 ## Segmentation Summary
 

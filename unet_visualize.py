@@ -24,14 +24,14 @@ if __name__ == "__main__":
 
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 
-    threshold = 0.99
+    threshold = 0.5
 
     # Dataset parameters
-    input_size = 256
+    input_size = 192
     bkg_path = 'backgrounds/validate'
     target_size = 20  # Smallest target size
     scale = None # (1.0, 1.0) # None=random scale
-    fill_prob = 0.5
+    fill_prob = 1.0
     expansion_factor = 3  # generate higher resolution targets and downscale, improves aliasing effects
     target_transforms = T.Compose([
         T.RandomPerspective(distortion_scale=0.5, p=1.0),
@@ -41,8 +41,8 @@ if __name__ == "__main__":
                 target_transforms=target_transforms, bkg_path=bkg_path)
 
     # Load model
-    first_model, first_transforms = load_unet_regular("runs/unet/run00863_final.pth", device)
-    second_model, second_transforms = load_unet_regular("runs/unet/run00842_final.pth", device)
+    first_model, first_transforms = load_unet_regular("runs/unet/run00925_final.pth", device)
+    second_model, second_transforms = load_unet_regular("runs/unet/run00886_final.pth", device)
 
     # Create the visual
     nrows = 4

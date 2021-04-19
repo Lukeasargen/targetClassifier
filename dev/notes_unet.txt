@@ -335,25 +335,83 @@ loss=0.11313. acc=0.9676. bce=0.13027. jaccard=0.9256. dice=0.9613. tversky=0.95
 
 
 # Gaussian Noise
-795 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.00
-loss=0.05153. acc=0.9663. bce=0.14867. jaccard=0.9485. dice=0.9735. tversky=0.9716. focal=0.001465.
-796 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
-loss=0.05816. acc=0.9661. bce=0.15707. jaccard=0.9418. dice=0.9700. tversky=0.9670. focal=0.001752.
-798 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.02
-loss=0.05790. acc=0.9679. bce=0.17616. jaccard=0.9421. dice=0.9702. tversky=0.9674. focal=0.002384.
-799 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.03
-loss=0.06591. acc=0.9659. bce=0.16308. jaccard=0.9341. dice=0.9659. tversky=0.9624. focal=0.001947.
+841 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.00
+loss=0.04981. acc=0.9682. bce=0.10283. jaccard=0.9502. dice=0.9744. tversky=0.9720. focal=0.000507.
+842 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
+loss=0.05245. acc=0.9692. bce=0.09447. jaccard=0.9475. dice=0.9731. tversky=0.9709. focal=0.000410.
+843 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.02
+loss=0.06081. acc=0.9643. bce=0.12270. jaccard=0.9392. dice=0.9686. tversky=0.9662. focal=0.000852.
+844 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.03
+loss=0.06328. acc=0.9660. bce=0.11659. jaccard=0.9367. dice=0.9673. tversky=0.9644. focal=0.000743.
+839 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.04
+loss=0.06042. acc=0.9691. bce=0.11669. jaccard=0.9396. dice=0.9688. tversky=0.9664. focal=0.000771.
+840 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.05
+loss=0.06681. acc=0.9675. bce=0.11900. jaccard=0.9332. dice=0.9654. tversky=0.9623. focal=0.000824.
+845 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.06
+loss=0.06818. acc=0.9655. bce=0.12528. jaccard=0.9318. dice=0.9647. tversky=0.9609. focal=0.000908.
+846 in=192 unet f=16 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.10
+loss=0.08196. acc=0.9654. bce=0.14839. jaccard=0.9180. dice=0.9572. tversky=0.9535. focal=0.001501.
 
+
+# 8 filters, some more tests
+847 in=192 unet f=8 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
+loss=0.06759. acc=0.9662. bce=0.10376. jaccard=0.9324. dice=0.9650. tversky=0.9619. focal=0.000527.
+848 in=192 unet f=8 maxpool relu bn ts=512 bs=32 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
+loss=0.06067. acc=0.9661. bce=0.09863. jaccard=0.9393. dice=0.9687. tversky=0.9659. focal=0.000441.
+849 in=192 unet f=8 maxpool relu bn ts=1024 bs=64 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
+loss=0.05401. acc=0.9683. bce=0.09675. jaccard=0.9460. dice=0.9722. tversky=0.9701. focal=0.000418.
+850 in=192 unet f=8 maxpool relu bn ts=2048 bs=128 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
+loss=0.05299. acc=0.9678. bce=0.09284. jaccard=0.9470. dice=0.9728. tversky=0.9708. focal=0.000367.
+
+851 in=192 unet_nested f=8 maxpool relu bn ts=512 bs=32 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
+loss=0.05211. acc=0.9689. bce=0.12391. jaccard=0.9479. dice=0.9732. tversky=0.9711. focal=0.000856.
+853 in=192 unet_nested_deep f=8 maxpool relu bn ts=512 bs=32 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
+loss=0.35550. acc=0.9676. bce=0.12130. jaccard=0.9105. dice=0.9532. tversky=0.9485. focal=0.000818.
+
+# add focal loss, 8 filters
+854 in=192 unet f=8 maxpool relu bn ts=512 bs=32 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard+focal fp=0.9 std=0.01
+loss=0.05948. acc=0.9683. bce=0.07204. jaccard=0.9407. dice=0.9694. tversky=0.9670. focal=0.000182.
+
+
+# redo activation test
+869 in=256 unet f=16 maxpool relu bn ts=512 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 dice fp=0.9 std=0.01
+Duration=23.90 minutes. 8960 iterations. loss=0.02476. acc=0.9682. bce=0.13526. jaccard=0.9517. dice=0.9752. tversky=0.9734. focal=0.001114.
+858 in=256 unet f=16 maxpool leaky bn ts=512 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 dice fp=0.9 std=0.01
+Duration=23.93 minutes. 8960 iterations. loss=0.02550. acc=0.9683. bce=0.13530. jaccard=0.9503. dice=0.9745. tversky=0.9726. focal=0.001120.
+857 in=256 unet f=16 maxpool silu bn ts=512 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 dice fp=0.9 std=0.01
+Duration=24.17 minutes. 8960 iterations. loss=0.02411. acc=0.9690. bce=0.12080. jaccard=0.9529. dice=0.9759. tversky=0.9744. focal=0.000801.
+856 in=256 unet f=16 maxpool mish bn ts=512 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 dice fp=0.9 std=0.01
+Duration=26.39 minutes. 8960 iterations. loss=0.02448. acc=0.9691. bce=0.12032. jaccard=0.9522. dice=0.9755. tversky=0.9740. focal=0.000813.
+
+
+# architecture test with new deep supervision
+880 in=192 unet_nested_deep f=8 maxpool relu bn ts=512 bs=32 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
+loss=0.05593. acc=0.9696. bce=0.10482. jaccard=0.9441. dice=0.9712. tversky=0.9691. focal=0.000533.
+879 in=192 unet_nested f=8 maxpool relu bn ts=512 bs=32 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
+loss=0.05385. acc=0.9712. bce=0.12233. jaccard=0.9461. dice=0.9723. tversky=0.9702. focal=0.000834.
+878 in=192 unet f=8 maxpool relu bn ts=512 bs=32 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
+loss=0.05986. acc=0.9699. bce=0.09399. jaccard=0.9401. dice=0.9691. tversky=0.9665. focal=0.000390.
+
+881 in=192 unet_nested_deep f=16 maxpool relu bn ts=512 bs=32 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
+loss=0.04789. acc=0.9727. bce=0.12240. jaccard=0.9521. dice=0.9755. tversky=0.9739. focal=0.000832.
+885 in=192 unet_nested f=16 maxpool relu bn ts=512 bs=32 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
+loss=0.04995. acc=0.9710. bce=0.16399. jaccard=0.9501. dice=0.9744. tversky=0.9727. focal=0.001920.
+886 in=192 unet f=16 maxpool relu bn ts=512 bs=32 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
+loss=0.05157. acc=0.9708. bce=0.11996. jaccard=0.9484. dice=0.9735. tversky=0.9716. focal=0.000785.
+
+923 in=192 unet_nested_deep f=32 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
+loss=0.04994. acc=0.9723. bce=0.11105. jaccard=0.9501. dice=0.9744. tversky=0.9728. focal=0.000631.
+924 in=192 unet_nested f=32 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
+loss=0.04968. acc=0.9715. bce=0.16078. jaccard=0.9503. dice=0.9745. tversky=0.9727. focal=0.001871.
+925 in=192 unet f=32 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
+loss=0.05283. acc=0.9706. bce=0.13957. jaccard=0.9472. dice=0.9729. tversky=0.9708. focal=0.001258.
+
+926 in=192 unet f=4 maxpool relu bn ts=256 bs=16 adamw step 280 lr=4e-3,[200, 250],0.2 m=0.9 wd=5e-4 jaccard fp=0.9 std=0.01
+loss=0.09254. acc=0.9684. bce=0.10733. jaccard=0.9075. dice=0.9514. tversky=0.9483. focal=0.000619.
 
 
 
 # Performance
-
-unet: 25.8ms, peak=1365 MB, total alloc=3004 MB
-unet_nested: 49.8ms, peak=4954 MB, total alloc=12368 MB
-unet_nested_deep: 55.4ms, peak=5257 MB, total alloc=12420 MB
-
-
 torch.cat must reallocate for each cat
 tensors are separate in memory?
 pre allocate tensors?

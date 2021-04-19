@@ -144,9 +144,10 @@ class UNetNestedDecoder(nn.Module):
         self.up13 = Up(filters[2]*3, filters[1], filters[1]*4, activation=activation)
         self.up04 = Up(filters[1]*4, filters[0], filters[0]*5, activation=activation)
         # Deep supervision
-        self.ds01 = nn.Conv2d(filters[0]*2, out_channels, kernel_size=1)
-        self.ds02 = nn.Conv2d(filters[0]*3, out_channels, kernel_size=1)
-        self.ds03 = nn.Conv2d(filters[0]*4, out_channels, kernel_size=1)
+        if self.deep:
+            self.ds01 = nn.Conv2d(filters[0]*2, out_channels, kernel_size=1)
+            self.ds02 = nn.Conv2d(filters[0]*3, out_channels, kernel_size=1)
+            self.ds03 = nn.Conv2d(filters[0]*4, out_channels, kernel_size=1)
         # Out
         self.out = nn.Conv2d(filters[0]*5, out_channels, kernel_size=1)
 
@@ -237,8 +238,9 @@ class UNet(nn.Module):
     
     @torch.jit.export
     def predict(self, x):
-        logits = self.forward(x)
-        return torch.sigmoid(logits)
+        with torch.no_grad():
+            logits = self.forward(x)
+            return torch.sigmoid(logits)
 
 
 def train_test(model, device):
@@ -279,12 +281,12 @@ if __name__ == "__main__":
 
     in_channels = 3
     out_channels = 1
-    model_type = "unet_nested"  # unet, unet_nested, unet_nested_deep
-    filters = [8, 16, 24, 32, 40] # 16
+    model_type = "unet_nested_deep"  # unet, unet_nested, unet_nested_deep
+    filters = 8
     activation = "relu"  # relu, leaky_relu, silu, mish
 
     batch_size = 1
-    input_size = 256
+    input_size = 192
 
     model = UNet(in_channels, out_channels, model_type, filters, activation, input_size=input_size).to(device)
 
@@ -328,6 +330,6 @@ if __name__ == "__main__":
     #         show_input=False,  # Input shape or output shape
     #         show_hierarchical=False, 
     #         print_summary=True,  # calls print before returning
-    #         max_depth=1,  # None searchs max depth
-    #         show_parent_layers=True
+    #         max_depth=None,  # None searchs max depth
+    #         show_parent_layers=False
     #         )

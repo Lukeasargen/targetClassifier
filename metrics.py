@@ -47,7 +47,7 @@ def dice_coeff(preds, targets, smooth: float = 1.0):
     preds = preds.view(-1)
     targets = targets.view(-1)
     intersection = (preds * targets).sum()
-    unionset = preds.sum() + targets.sum()
+    unionset = (preds + targets).sum()
     return (2.0 * intersection + smooth) / (unionset + smooth)
 
 class DiceLoss(nn.Module):
