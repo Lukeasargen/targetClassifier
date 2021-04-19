@@ -117,7 +117,7 @@ def time_dataloader(dataset, batch_size=64, max_num_workers=8, num=4096):
 
 if __name__ == "__main__":
 
-    input_size = 256
+    input_size = 64
 
     train_size = 256
     batch_size = 8
@@ -127,7 +127,7 @@ if __name__ == "__main__":
 
     dataset_folder = None #'images/classify1'  # root directory that has images and labels.csv, if None targets are made during the training
     bkg_path = 'backgrounds/validate'  # path to background images, None is a random color background
-    target_size = 80  # Smallest target size
+    target_size = 20  # Smallest target size
     fill_prob = 0.5
     expansion_factor = 1  # generate higher resolution targets and downscale, improves aliasing effects
     target_transforms = T.Compose([
@@ -170,4 +170,4 @@ if __name__ == "__main__":
 
     # dataset_stats(train_dataset, num=1000)
 
-    time_dataloader(train_dataset, batch_size=16, max_num_workers=8, num=256)
+    # time_dataloader(train_dataset, batch_size=16, max_num_workers=8, num=256)

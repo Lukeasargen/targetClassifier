@@ -4,3 +4,4 @@ tensorboard
 torchsummary
 pytorch_model_summary
 torchviz
+psutil

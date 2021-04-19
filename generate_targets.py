@@ -41,7 +41,7 @@ class TargetGenerator():
         self.target_transforms = target_transforms
         self.bkg_path = bkg_path
         if bkg_path:
-            print(" * Loading background images.")
+            print(" * TargetGenerator: Loading background images...")
             self.bkg_count = 0  # Track when all backgrounds are used and then reset
             # TODO : resize to save memory???
             ts = time.time()
