@@ -21,7 +21,14 @@ from logger import Logger
 from metrics import pixel_accuracy, jaccard_iou, dice_coeff, tversky_measure, focal_metric
 
 from models.unet import UNet, save_unet
-    
+
+
+def set_seed(seed):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+
 
 def view_outputs(model, train_dataset, threshold=0.5):
     nrows = 5
@@ -62,12 +69,10 @@ def calc_loss(logits: torch.Tensor, targets: torch.Tensor):
 
 def calc_metrics(logits: torch.Tensor, targets: torch.Tensor):
     preds = torch.sigmoid(logits)
-    # logits = logits.float()
-    # preds = preds.float()
-    # targets = targets.float()
+    bce = F.binary_cross_entropy_with_logits(logits, targets)
     metrics = {
         "acc": pixel_accuracy(preds, targets, threshold=0.5).item(),
-        "bce": F.binary_cross_entropy_with_logits(logits, targets).item(),
+        "bce": bce.item(),
         "jaccard": jaccard_iou(preds, targets, smooth=1.0).item(),
         "dice": dice_coeff(preds, targets, smooth=1.0).item(),
         "tversky": tversky_measure(preds, targets, alpha=0.3, beta=0.7, smooth=1.0).item(),
@@ -78,36 +83,36 @@ def calc_metrics(logits: torch.Tensor, targets: torch.Tensor):
 
 if __name__ == "__main__":
     MANUAL_SEED = 42
-    np.random.seed(MANUAL_SEED)
-    torch.manual_seed(MANUAL_SEED)
-    torch.cuda.manual_seed(MANUAL_SEED)
-    torch.backends.cudnn.deterministic = True
+    set_seed(MANUAL_SEED)
     torch.backends.cudnn.benchmark = False
 
     # Training data
+    save_final = True
+    run_validation = True
     graph_metrics = True
     view_results = True
-    save_final = True
     view_threshold = 0.5
 
     # Model Config
     in_channels = 3
     out_channels = 1
-    model_type = "unet_nested_deep"  # unet, unet_nested, unet_nested_deep
-    filters = 8  # 16
+    model_type = "unet"  # unet, unet_nested, unet_nested_deep
+    filters = 4  # 16
     activation = "relu"  # relu, leaky_relu, silu, mish
 
     # Training Hyperparameters
-    input_size = 256 # 400
-    num_epochs = 280 # 20
-    train_size = 512 # 8000
-    batch_size = 32 # 4
+    input_size = 192 # 400
+    train_epochs = 280 # 20
+    val_epochs = 4
+    train_size = 256 # 8000
+    batch_size = 16 # 4
     shuffle = False
     num_workers = 6
     drop_last = False
 
     # Mixed precision
     use_amp = False
+    detect_grad_failures = False  # sets autograd.detect_anomaly
 
     # Optimization
     optim_type = 'adamw'  # sgd 1e-1, rmsprop 1e-3, adam 4e-3, adamw 4e-3, adagrad 1e-2
@@ -115,6 +120,7 @@ if __name__ == "__main__":
     momentum = 0.9  # 0.9
     nesterov = True
     weight_decay = 5e-4  # 0, 1e-5, 3e-5, *1e-4, 3e-4, *5e-4, 3e-4, 1e-3, 1e-2
+    clip_grad_max = None  # None is no clipping, otherwise use a positive float
     scheduler_type = 'step'  # step, plateau, exp
     lr_milestones = [200, 250]  # for StepLR, [10, 15]
     lr_gamma = 0.2
@@ -128,7 +134,7 @@ if __name__ == "__main__":
     set_mean = [0.5, 0.5, 0.5]
     set_std = [0.5, 0.5, 0.5]
     target_transforms = T.Compose([
-        T.RandomPerspective(distortion_scale=0.5, p=1.0, interpolation=Image.BICUBIC),
+        T.RandomPerspective(distortion_scale=0.5, p=1.0),
     ])
     train_transforms = T.Compose([
         CustomTransformation(),
@@ -216,9 +222,10 @@ if __name__ == "__main__":
     run_stats = []
 
     # Training loop
+    print(" * Start training...")
     t0 = time.time()
     iterations = 0
-    for epoch in range(num_epochs):  # loop over the dataset multiple times
+    for epoch in range(train_epochs):  # loop over the dataset multiple times
 
         t1 = time.time()
         epoch_loss_total = 0.0
@@ -233,22 +240,24 @@ if __name__ == "__main__":
 
             if use_amp:
                 with amp.autocast():
-                    # with torch.autograd.detect_anomaly():
-                    logits = model(data)
+                    with torch.autograd.set_detect_anomaly(detect_grad_failures):
+                        logits = model(data)
                     loss = calc_loss(logits, true_masks)
                 scalar.scale(loss).backward()
+                if clip_grad_max != None:
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), clip_grad_max)
                 scalar.step(optimizer)
                 scalar.update()
             else:
                 logits = model(data)
                 loss = calc_loss(logits, true_masks)
                 loss.backward()
+                if clip_grad_max != None:
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), clip_grad_max)
                 optimizer.step()
 
             iterations += 1
-
-            # TODO : Validation
-            # model.eval()
 
             # Update running metrics           
             batch_metrics = calc_metrics(logits, true_masks)
@@ -277,18 +286,50 @@ if __name__ == "__main__":
                 scheduler.step()
 
         duration = time.time()-t1
-        remaining = duration*(num_epochs-epoch-1)
+        remaining = duration*(train_epochs-epoch-1)
         print("epoch {}. {} iterations: {}. loss={:.04f}. lr={:.06f}. elapsed={}. remaining={}.".format(epoch+1, iterations, time_to_string(duration), epoch_loss, optimizer.param_groups[0]['lr'], time_to_string(time.time()-t0), time_to_string(remaining)))
 
     # END TRAIN LOOP
-
     print('Finished Training. Duration={}. {} iterations.'.format(time_to_string(time.time()-t0), iterations))
     print("Final stats:")
     print("loss={:.05f}. acc={:.04f}. bce={:.05f}. jaccard={:.04f}. dice={:.04f}. tversky={:.04f}. focal={:.06f}.".format(epoch_metrics["train_loss"], epoch_metrics["acc"], epoch_metrics["bce"], epoch_metrics["jaccard"], epoch_metrics["dice"], epoch_metrics["tversky"], epoch_metrics["focal"]))
     
+
     # Save Model
     if save_final:
         save_unet(model, save_path(current_run, "final"))
+
+
+    if run_validation:
+        print(" * Running validation...")
+        set_seed(MANUAL_SEED)
+        model.eval()
+        val_loss_total = 0.0
+        val_metrics_total = Counter({})
+        t0 = time.time()
+        for epoch in range(val_epochs):
+            t1 = time.time()
+            for batch_idx, (data, true_masks) in enumerate(train_loader):
+                data = data.to(device=device)
+                true_masks = true_masks.to(device=device)
+                with torch.no_grad():
+                    if use_amp:
+                        with amp.autocast():
+                            logits = model(data)
+                        loss = calc_loss(logits, true_masks)
+                    else:
+                        logits = model(data)
+                        loss = calc_loss(logits, true_masks)
+                batch_metrics = calc_metrics(logits, true_masks)
+                val_loss_total += loss.item()
+                val_metrics_total += Counter(batch_metrics)
+            duration = time.time()-t1
+            print("validation {}/{}. elapsed={}. remaining={}.".format(epoch+1, val_epochs, time_to_string(time.time()-t0), time_to_string(remaining)))
+        # END VALIDATION LOOP
+        val_loss = val_loss_total/(val_epochs*len(train_loader))
+        val_metrics = {k: v/(val_epochs*len(train_loader)) for k, v in val_metrics_total.items()}
+        print("Validation stats:")
+        print("loss={:.05f}. acc={:.04f}. bce={:.05f}. jaccard={:.04f}. dice={:.04f}. tversky={:.04f}. focal={:.06f}.".format(val_loss, val_metrics["acc"], val_metrics["bce"], val_metrics["jaccard"], val_metrics["dice"], val_metrics["tversky"], val_metrics["focal"]))
 
 
     if view_results:
@@ -308,28 +349,28 @@ if __name__ == "__main__":
         ax[0][0].set_ylabel('train loss', fontsize=font_size)
         ax[0][0].set_yscale('log')
         ax[0][0].tick_params(axis='y')
-        ax[0][0].plot(range(1, num_epochs+1), [x["train_loss"] for x in run_stats], color=line_colors[0], label="train loss")
+        ax[0][0].plot(range(1, train_epochs+1), [x["train_loss"] for x in run_stats], color=line_colors[0], label="train loss")
 
         # bce, top 1
         ax[0][1].set_xlabel('epochs', fontsize=font_size)
         ax[0][1].set_ylabel('bce', fontsize=font_size)
         ax[0][1].set_yscale('log')
         ax[0][1].tick_params(axis='y')
-        ax[0][1].plot(range(1, num_epochs+1), [x["bce"] for x in run_stats], color=line_colors[0], label="bce loss")
+        ax[0][1].plot(range(1, train_epochs+1), [x["bce"] for x in run_stats], color=line_colors[0], label="bce loss")
 
         # focal, top 2
         ax[0][2].set_xlabel('epochs', fontsize=font_size)
         ax[0][2].set_ylabel('focal', fontsize=font_size)
         ax[0][2].set_yscale('log')
         ax[0][2].tick_params(axis='y')
-        ax[0][2].plot(range(1, num_epochs+1), [x["focal"] for x in run_stats], color=line_colors[0], label="focal loss")
+        ax[0][2].plot(range(1, train_epochs+1), [x["focal"] for x in run_stats], color=line_colors[0], label="focal loss")
 
         # lr, bot 0
         ax[1][0].set_xlabel('epochs', fontsize=font_size)
         ax[1][0].set_ylabel('lr', fontsize=font_size)
         ax[1][0].set_yscale('log')
         ax[1][0].tick_params(axis='y')
-        ax[1][0].plot(range(1, num_epochs+1), [x["lr"] for x in run_stats], color=line_colors[0], label="lr")
+        ax[1][0].plot(range(1, train_epochs+1), [x["lr"] for x in run_stats], color=line_colors[0], label="lr")
 
         # coef, bot 1
         ax[1][1].set_xlabel('epochs', fontsize=font_size)
@@ -337,7 +378,7 @@ if __name__ == "__main__":
         ax[1][1].tick_params(axis='y')
         coef = ["jaccard", "dice", "tversky"]
         for i in range(len(coef)):
-            ax[1][1].plot(range(1, num_epochs+1), [x[coef[i]] for x in run_stats], color=line_colors[i], label=coef[i])
+            ax[1][1].plot(range(1, train_epochs+1), [x[coef[i]] for x in run_stats], color=line_colors[i], label=coef[i])
         ax[1][1].legend()
 
         # acc, bot 2
@@ -345,7 +386,7 @@ if __name__ == "__main__":
         ax[1][2].set_ylabel('acc', fontsize=font_size)
         # ax[1][2].set_yscale('log')
         ax[1][2].tick_params(axis='y')
-        ax[1][2].plot(range(1, num_epochs+1), [x["acc"] for x in run_stats], color=line_colors[0], label="acc")
+        ax[1][2].plot(range(1, train_epochs+1), [x["acc"] for x in run_stats], color=line_colors[0], label="acc")
 
 
         fig.tight_layout()  # otherwise the right y-label is slightly clipped
